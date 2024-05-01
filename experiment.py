@@ -34,7 +34,7 @@ from IPython import get_ipython
 from PyQt5.QtWidgets import QFileDialog
 import gzip,bz2,lzma
 
-from .panel_experiment_interface import Panel_Interface_Exp,Panel_message
+from .experiment_interface import Panel_Interface_Exp,Panel_message
 from .hal import Hal_interpreter
 from pymeso.utils import Measurement,Spy,myTimer,Sweep,Data_Saver,ExperimentError,Plotter,Alias
 from pymeso.utils import LinSweep,LinSteps,ArraySteps
@@ -91,13 +91,14 @@ class Experiment(object):
         # define the file for log
         if logfile != None:
             log = logging.getLogger()
-            handler = logging.FileHandler(logfile,mode='a+')
+            handler = logging.FileHandler(path+logfile,mode='a+')
             handler.setLevel(logging.INFO)
             formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s',datefmt='%m/%d/%y %H:%M:%S')
             handler.setFormatter(formatter)
             log.addHandler(handler)
         self.logger=logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
+        self.logger.info('Starting a new experiment instance')
         
         # set register and measure
         self.register={}
@@ -309,7 +310,7 @@ class Experiment(object):
         with file_open(file, mode_open) as f:
             f.write(content)
                    
-    def config(self,measure,config_list):
+    def config(self,measure,config_list,comment=None):
         """
             Internal function used to generate a string with the configuration
         """
@@ -343,6 +344,10 @@ class Experiment(object):
         #if nline<10:
         #    for i in range(10-nline):
         #        conf_string+='#\n'
+        if comment != None:
+            conf_string+='# COMMENT\n'
+            for line in comment.split('\n'):
+                conf_string+="# "+line+"\n"
         return conf_string 
         
     def generate_config(self,measure):
@@ -910,7 +915,7 @@ class Experiment(object):
               wait_time=None,init_wait=None,
               measure=None, batch=False, 
               interface=None, plotter=None,run=True,
-              file_format='csv'):
+              file_format='csv',comment=None):
         """
             Sweep the device defined in 'device' from start to end 
             at a given rate with Npoints points and save it to the file 'file'. 
@@ -978,14 +983,15 @@ class Experiment(object):
             self.multisweep(local_sweep,file,
                             overwrite=overwrite,format=format,measure=measure,
                             wait=wait,batch=batch,interface=interface,
-                            plotter=plotter,config_info=config_info,run=run)
+                            plotter=plotter,config_info=config_info,run=run,
+                            comment=comment)
                             
     def megasweep(self,stepper_list,file,
         overwrite=False, format='line', 
         measure=None, wait=True,
         wait_time=None,
 		batch=False, interface=None, 
-        run=True, plotter=None):
+        run=True, plotter=None,comment=None):
         """          
             Multi-sweep using the list defined in stepper_list and save it to a file 'file'. If the file extension is .gz, .bz2 or .xz, the file is automatically compressed with the corresponding algorithm.
 
@@ -1054,7 +1060,8 @@ class Experiment(object):
             self.multisweep(local_sweep,file,
                             overwrite=overwrite,format=format,measure=measure,
                             wait=wait,batch=batch,interface=interface,
-                            plotter=plotter,config_info=config_info,run=run)
+                            plotter=plotter,config_info=config_info,run=run,
+                            comment=comment)
        
     def multisweep(self,stepper_list,file,
         overwrite=False, format='line', 
@@ -1062,7 +1069,7 @@ class Experiment(object):
         wait_time=None,
 		batch=False, interface=None, 
         plotter=None, config_info=None,
-        run=True):
+        run=True,comment=None):
         """          
             Multi-sweep using a list of sweeps defined in stepper_list and save it to a file 'file'. If the file extension is .gz, .bz2 or .xz, the file is automatically compressed with the corresponding algorithm.
 
@@ -1079,6 +1086,7 @@ class Experiment(object):
             - measure : specify the measured quantities in the form of a python dict. if None set to self.measure. Default : None
             - wait_time : value of the time waited before each mesurement, if None set to self.wait_time. Default : None
             - wait : if True, wait the wait_time before doing the measurement. Default : True
+            - comment : string provided by the user that will be inserted in the header of the file
             
             EXAMPLES :
                 step_heater=LinSteps([test,'dac3'],0,1,5,15,name='Heater')
@@ -1164,10 +1172,10 @@ class Experiment(object):
                 except:
                     pass
             config_list+=[[{'wait_time':wait_time,'wait':wait,'format':format,'overwrite':overwrite},]]
-            self.write_to_file(file,self.config(measure,config_list))
+            self.write_to_file(file,self.config(measure,config_list,comment=comment))
             if config_info==None:
                 config_info=['Multisweep','Sweeps: {}, File :{}'.format(Nstepper,file)]
-            self.logger.info('\n{}# FILE : {}\n'.format(self.config(measure,config_list),file))
+            self.logger.info('\n{}# FILE : {}\n'.format(self.config(measure,config_list,comment=comment),file))
             
             # Create one Data_Saver object 
             data_saver=Data_Saver(temp_file)
@@ -1248,7 +1256,7 @@ class Experiment(object):
     def record(self,time_interval,npoints,file,
                 overwrite=False,measure=None, 
                 batch=False, interface=None,plotter=None,
-                format='line',run=True):
+                format='line',run=True,comment=None):
         """
             Record data every time_interval (in seconds) with npoints points in the file 'file'. If the  file extension is .gz, .bz2 or .xz, the file is automatically compressed with the corresponding algorithm.
             
@@ -1281,7 +1289,7 @@ class Experiment(object):
                         overwrite=overwrite,format=format,measure=measure,
                         wait=True,batch=batch,interface=interface,
                         plotter=plotter,config_info=config_info,
-                        run=run)
+                        run=run,comment=comment)
                   
     def work_wait(self,value,dict=None,interface=None,batch=False):
         """
