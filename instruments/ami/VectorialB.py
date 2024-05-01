@@ -233,6 +233,8 @@ class B_Vector(Instrument):
                 break
         if finished:
             self._progress=1.0
+        else :
+            self._progress=self.index/self._length
         return(self._progress)
         
     def index_sweepable(self):
