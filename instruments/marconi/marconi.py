@@ -27,6 +27,7 @@
 #
 
 from pymeso.instruments import Instrument
+from pymeso.instruments.utils.utils import convert_to_np_array
 import numpy as np
 
 class Marconi(Instrument):
@@ -43,21 +44,21 @@ class Marconi(Instrument):
     def __init__(self, resourceName, **kwargs):
         super(Marconi, self).__init__(
             resourceName,
-            "Tektronic FCA3100 counter",
+            "Marconi RF generator",
             **kwargs
         )
         
     @property
     def frequency(self):
-        return(float(self.ask(CFRQ?)))
-        
+        return convert_to_np_array(self.ask('CFRQ?'))[0]
+       
     @frequency.setter
     def frequency(self,value):
         self.write('CFRQ '+str(value))
     
     @property
     def amplitude(self):
-        return(float(self.ask(RFLV?)))
+        return convert_to_np_array(self.ask('RFLV?'))[0]
         
     @amplitude.setter
     def amplitude(self,value):
