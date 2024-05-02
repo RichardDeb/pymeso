@@ -38,12 +38,12 @@ from . import ametek
 from . import anritsu
 from . import deltaelektronika
 from . import danfysik
-#from . import fwbell
+# from . import fwbell
 from . import hp
 from . import keithley
 from . import lakeshore
-from . import parker
-from . import signalrecovery
+# from . import parker
+# from . import signalrecovery
 from . import srs
 from . import tektronix
 from . import thorlabs
