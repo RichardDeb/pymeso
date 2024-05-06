@@ -29,7 +29,7 @@ import time
 import panel as pn
 from bokeh.models.formatters import PrintfTickFormatter
 from threading import Thread, Event
-from IPython.display import display
+# from IPython.display import display
 from datetime import datetime
 import pyperclip,os
 import gzip,bz2,lzma
@@ -65,8 +65,9 @@ class Panel_Interface_Exp(object):
             # plot panel
             self.plotpanel=pn.Column()
             # display
-            self.main=pn.Column(self.batchpanel,self.mainpanel,self.plotpanel)
+            self.main=pn.Column(self.batchpanel,self.mainpanel,self.plotpanel).servable()
             display(self.main)
+            time.sleep(0.2)
             # logger
             self.logger=logging.getLogger(__name__)
             self.logger.setLevel(logging.INFO)
@@ -188,18 +189,23 @@ class Panel_Interface_Exp(object):
                                       width=350)
         stepper_row=pn.Row(start_value,float_slider,end_value)
         self.mainpanel.append(stepper_row)
+        time.sleep(0.2)
         self.step_dict[name]['start']=start_value
         self.step_dict[name]['end']=end_value
         self.step_dict[name]['slider']=float_slider
     
     def set_stepper(self,name,start,stop,value,status,mode):
+        time.sleep(0.2)
         self.step_dict[name]['start'].value=str(start)
+        time.sleep(0.2)
         self.step_dict[name]['end'].value=str(stop)
+        time.sleep(0.2)
         self.step_dict[name]['slider'].name=name
         self.step_dict[name]['slider'].value=value
         self.step_dict[name]['slider'].start=start
         self.step_dict[name]['slider'].end=stop
         self.step_dict[name]['slider'].step=abs((stop-start)/100.0)
+        time.sleep(0.2)
         # self.step_dict[name]['slider'].param.set_param(start=start,end=stop,value=value,
         #                                step=abs((stop-start)/100.0))
         # self.step_dict[name]['slider'].disabled=False
@@ -222,11 +228,13 @@ class Panel_Interface_Exp(object):
         self.step_dict[name]['slider'].value=value
                  
     def set_text(self,value,description=None):
+        time.sleep(0.1)
         self.text.value=value
         if description != None:
             self.text.name=description
             
     def set_batch_text(self,value,description=None):
+        time.sleep(0.1)
         self.batch_text.value=value
         if description != None:
             self.batch_text.name=description
@@ -288,6 +296,7 @@ class Panel_Interface_Exp(object):
         accordion = pn.Accordion(('Plot options', layout))
         # insert in plot panel
         self.plotpanel.append(accordion)
+        time.sleep(0.2)
         
         # read columns name in a thread
         thread_read_columns = Thread(name='Read_column_name',target=self.read_columns_name)
