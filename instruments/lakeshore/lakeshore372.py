@@ -311,29 +311,29 @@ class LakeShore372(Instrument):
             Read or set the heater temperature in K. Adjust automatically the range to get the right value.
             If value is zero or negative put the sample heater to off
         """
-        if value<=0:    # put the system in OFF mode if value <=0
-            self.write('OUTMODE 0,0')
-        else:           # set power
-            # show heater in power (W) with 120 ohm heater
-            self.write('HTRSET 0,120,0,0,2')
-            # set the range on the right value
-            if value<0.05:
-                power_range=4
-            elif value<0.5:
-                power_range=6
-            elif value<1:
-                pwer_range=7
-            else:
-                power_range=8
-            self.write('RANGE 0,{}'.format(power_range))
-            # set bridge in Closed Loop mode with input from channel 6
-            self.write('OUTMODE 0,5,6,0,0,1')
-            # set PID to 10,20,0.1
-            self.write('PID 0,10,20,0.1')
-            # set the ramping speed to 1K/min
-            self.write('RAMP 0,1,1')
+        # if value<=0:    # put the system in OFF mode if value <=0
+            # self.write('OUTMODE 0,0')
+        # else:           # set power
+            # # show heater in power (W) with 120 ohm heater
+            # self.write('HTRSET 0,120,0,0,2')
+            # # set the range on the right value
+            # if value<0.05:
+                # power_range=4
+            # elif value<0.5:
+                # power_range=6
+            # elif value<1:
+                # pwer_range=7
+            # else:
+                # power_range=8
+            # self.write('RANGE 0,{}'.format(power_range))
+            # # set bridge in Closed Loop mode with input from channel 6
+            # self.write('OUTMODE 0,5,6,0,0,1')
+            # # set PID to 10,20,0.1
+            # self.write('PID 0,10,20,0.1')
+            # # set the ramping speed to 1K/min
+            # self.write('RAMP 0,1,1')
             # set the temperature in Kelvin
-            self.write('SETP 0,{}'.format(value))
+        self.write('SETP 0,{}'.format(value))
     
     # Functions used to generate a GUI
     def get_data_dict(self):
