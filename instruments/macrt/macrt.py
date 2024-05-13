@@ -28,6 +28,9 @@
 
 from pymeso.instruments import Instrument
 import socket
+import time
+from threading import Thread
+from pymeso.instruments.utils import Device_gui
 
 class Macrt(Instrument):
     """ 
@@ -46,28 +49,26 @@ class Macrt(Instrument):
     """
     
     def __init__(self):
-        # Create a UDP socket for listening
+        # Create 3 TCP socket for listening to the 3 MMR3 modules
+        
+        # MMR3 Low Temperature
+        self.mmr3_LT=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mmr3_LT.connect(('192.168.0.31',11031))
+        
+        # MMR3 High Temperature
+        self.mmr3_HT=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mmr3_HT.connect(('192.168.0.32',11032))
+        
+        # MMR3 Magnet
+        self.mmr3_Mag=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mmr3_Mag.connect(('192.168.0.33',11033))
+        
+        # Create a UDP socket for MGC3 module
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        UDP_IP = ''
+        UDP_IP = '127.0.0.1'
         UDP_PORT = 12000
         self.sock.bind((UDP_IP, UDP_PORT))
-        # Define MMR3 modules 
-        self.modules = [ {'ip':'192.168.0.31',
-             'port':12031,
-             'channels':('MC RuO2','','Still'),
-             'index':(3,5,14,16,25,27),
-             },
-             {'ip':'192.168.0.33',
-             'port':12033,
-             'channels':('Magnet','','Switch'),
-             'index':(3,5,14,16,25,27)
-             },
-            {'ip':'192.168.0.32',
-             'port':12032,
-             'channels':('MC Cernox','4K stage','50K stage'),
-             'index':(3,5,14,16,25,27)
-             },
-          ]
+        
         # Define MGC3 module  
         self.mgc3 = [{'ip':'192.168.0.39',
              'port':12039,
@@ -80,18 +81,83 @@ class Macrt(Instrument):
              'on':(1,13,25)
              }]
              
+        # control the execution of the update thread
+        self._running=True
+        
+        # values of the readings, updated by the update thread
+        self._R_MC_RuO2=0.0
+        self._T_MC_RuO2=0.0
+        self._R_MC_Cernox=0.0
+        self._T_MC_Cernox=0.0
+        self._R_still=0.0
+        self._T_still=0.0
+        self._R_magnet=0.0
+        self._T_magnet=0.0
+        self._R_switch=0.0
+        self._T_switch=0.0
+        self._R_4K=0.0
+        self._T_4K=0.0
+        self._R_50K=0.0
+        self._T_50K=0.0
+        
+        # define the thread measuring temperatures continuously and start it
+        self.update_thread=Thread(target=self.work_read_MMR3s,name="MMR3s_Update")
+        self.update_thread.start()
+             
+    def get_values_MMR3(self,client):
+        """
+            Internal function : extract R and T from a MMR3 module corresponding to the TCP client
+        """
+        data_str=client.recv(1024).decode()
+        temp=data_str.split('\n')
+        label_dict={'3':'R1','5':'T1','14':'R2','16':'T2','25':'R3','27':'T3'}
+        data_dict={}
+        keys=label_dict.keys()
+        for i in range(len(temp)):
+            line_str=temp[i].split(';')
+            if line_str[0] in keys:
+                try :
+                    data_dict[label_dict[line_str[0]]]=float(line_str[2])
+                except:
+                    pass
+        return(data_dict)
+        
+    def work_read_MMR3s(self):
+        """
+            Internal function : used to read periodically the values of the MMR3 modules
+        """
+        while self._running:
+            for i,client in enumerate((self.mmr3_LT,self.mmr3_HT,self.mmr3_Mag)):
+                values_dict=self.get_values_MMR3(client)
+                try:
+                    if i==0:    # for Low Temp MMR3
+                        self._R_MC_RuO2=values_dict['R1']
+                        self._T_MC_RuO2=values_dict['T1']
+                        self._R_still=values_dict['R3']
+                        self._T_still=values_dict['T3']
+                    elif i==1:  # for High Temp MMR3
+                        self._R_MC_Cernox=values_dict['R1']
+                        self._T_MC_Cernox=values_dict['T1']
+                        self._R_4K=values_dict['R2']
+                        self._T_4K=values_dict['T2']
+                        self._R_50K=values_dict['R3']
+                        self._T_50K=values_dict['T3']
+                    else:       # for magnet MMR3
+                        self._R_magnet=values_dict['R1']
+                        self._T_magnet=values_dict['T1']
+                        self._R_switch=values_dict['R2']
+                        self._T_switch=values_dict['T2']
+                except:
+                    pass
+            time.sleep(1.0)             
+    
     def close(self):
+        self._running=False
+        time.sleep(1.5)
         self.sock.close()
-        
-    def send_MMR3(self,module,index):
-        """
-            Internal function : send a message to the MMR3 modules
-        """
-        message=('MMR3GET '+str(self.modules[module]['index'][index])).encode('utf-8')
-        self.sock.sendto(message,(self.modules[module]['ip'],self.modules[module]['port']))
-        data, server = self.sock.recvfrom(4096)
-        return(float(data.decode()))
-        
+        for client in (self.mmr3_LT,self.mmr3_HT,self.mmr3_Mag):
+            client.close()
+               
     def send_MGC3_get(self,module,prop,index):
         """
             Internal function : send a message to the MGC3 module
@@ -111,111 +177,80 @@ class Macrt(Instrument):
     @property 
     def R_MC_RuO2(self):
         """ Value of the RuO2 resistance on the mixing chamber"""
-        module=0
-        index=0
-        return(self.send_MMR3(module,index))
+        return(self._R_MC_RuO2)
 
     @property    
     def T_MC_RuO2(self):
         """ Temperature of the mixing chamber measured by the Ru02 thermometer """
-        module=0
-        index=1
-        return(self.send_MMR3(module,index))
+        return(self._T_MC_RuO2)
         
     @property    
     def R_still(self):
         """ Value of the resistance on the Still """
-        module=0
-        index=4
-        return(self.send_MMR3(module,index))
+        return(self._R_still)
 
     @property    
     def T_still(self):
         """ Temperature of the Still """
-        module=0
-        index=5
-        return(self.send_MMR3(module,index))
+        return(self._T_still)
 
     @property    
     def R_magnet(self):
         """ Value of the resistance on the Magnet """
-        module=1
-        index=0
-        return(self.send_MMR3(module,index))
+        return(self._R_magnet)
 
     @property    
     def T_magnet(self):
         """ Temperature of the Magnet """
-        module=1
-        index=1
-        return(self.send_MMR3(module,index))
+        return(self._T_magnet)
         
     @property    
     def R_switch(self):
         """ Value of the resistance on the Switch """
-        module=1
-        index=2
-        return(self.send_MMR3(module,index))
+        return(self._R_switch)
 
     @property    
     def T_switch(self):
         """ Temperature of the Switch """
-        module=1
-        index=2
-        return(self.send_MMR3(module,index))
+        return(self._T_switch)
+    
+    @property
     def R_Still(self):
-        module=0
-        index=4
-        return(self.send_MMR3(module,index))
+        return(self._R_still)
 
     @property    
     def T_Still(self):
-        module=0
-        index=5
-        return(self.send_MMR3(module,index))          
+        return(self._T_still)   
     
-
     @property    
     def R_MC_cernox(self):
         """ Value of the Cernox resistance on the mixing chamber"""
-        module=2
-        index=0
-        return(self.send_MMR3(module,index))
+        return(self._R_MC_Cernox)
 
     @property    
     def T_MC_cernox(self):
         """ Temperature of the mixing chamber measured by the Cernox thermometer """
-        module=2
-        index=1
-        return(self.send_MMR3(module,index))
+        return(self._T_MC_Cernox)
         
     @property    
     def R_4K(self):
         """ Value of the resistance on the 4K stage """
-        module=2
-        index=2
-        return(self.send_MMR3(module,index))
+        return(self._R_4K)
 
     @property    
     def T_4K(self):
         """ Temperature of the 4K stage """
-        module=2
-        index=3
-        return(self.send_MMR3(module,index))
+        return(self._T_4K)
         
     @property    
     def R_50K(self):
         """ Value of the resistance on the 50K stage """
-        module=2
-        index=4
-        return(self.self.send_MMR3(module,index))
+        return(self._R_50K)
 
     @property    
     def T_50K(self):
         """ Temperature of the 50K stage """
-        module=2
-        index=5
-        return(self.self.send_MMR3(module,index))
+        return(self._T_50K)
         
     def set_PID_MC(self,P=None,I=None,D=None,Pmax=None):
         """ Set the PID function for the mixing chamber """
@@ -323,4 +358,26 @@ class Macrt(Instrument):
         """
         module=0
         index=1
-        self.send_MGC3_set(0,module,'on',index)       
+        self.send_MGC3_set(0,module,'on',index)
+
+    # Functions used to generate a GUI
+    def get_data_dict(self):
+        """ Get some data and generate a dict"""
+        data_dict={}
+        data_dict['Temperatures']={
+            '50K' : self._T_50K,
+            '4K' : self._T_4K,
+            'Magnet' : self._T_magnet,
+            'Switch' : self._T_switch,
+            'Still' : self._T_still,
+            'MXC_Cernox' : self._T_MC_Cernox,
+            'MXC_RuO2' : self._T_MC_RuO2
+            }
+        return(data_dict)
+        
+    def gui(self,name=None):
+        """Create a GUI based on get_data_dict() """
+        if name==None:
+            name='Fridge Temperatures'
+        local_gui=Device_gui(name)
+        local_gui.start(self.get_data_dict,wait=5.0)         
