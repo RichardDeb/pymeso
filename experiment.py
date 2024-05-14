@@ -1251,7 +1251,8 @@ class Experiment(object):
                 if batch:
                     interface.clear_for_batch()
                 else:    
-                    interface.finished()
+                    interface.finished(stopped=interface.should_stop.is_set())
+                return None
     
     def record(self,time_interval,npoints,file,
                 overwrite=False,measure=None, 
