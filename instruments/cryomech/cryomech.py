@@ -199,7 +199,7 @@ class PTC(Instrument):
         # If there is an error in the string format, print the
         # error to logs, return an empty dictionary, and flag the data as bad
         data = {}
-        data["datetime"] = datetime.datetime.now().isoformat()
+        data["datetime"] = datetime.datetime.now().replace(microsecond=0).isoformat()
         try:
             for key in keyloc.keys():
                 locs = keyloc[key]
@@ -272,13 +272,13 @@ class PTC(Instrument):
     def get_data_dict(self):
         """ Get some data and generate a dict"""
         data_dict={}
-        data_dict['Temperatures']=self.get_data()[1]
+        data_dict['Parameters']=self.get_data()[1]
         return(data_dict)
         
     def gui(self,name=None):
         """Create a GUI based on get_data_dict() """
         if name==None:
-            name='Fridge Temperatures'
+            name='Pulse Tube Compressor'
         local_gui=Device_gui(name)
         local_gui.start(self.get_data_dict,wait=5.0) 
 
