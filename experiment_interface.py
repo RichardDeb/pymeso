@@ -494,9 +494,11 @@ class Panel_Interface_Exp(object):
         
         #clear interface
         self.main.clear()
+        time.sleep(0.2)
         # write last message
         message='**Task done the '+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+' :** <br>'+value_string
         self.main.append(pn.pane.Markdown(message,width=590))
+        time.sleep(0.2)
         # if plotting asked, do the plot
         try:
             if self.plot_option.value:
