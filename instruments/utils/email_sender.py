@@ -23,170 +23,130 @@
 # THE SOFTWARE.
 #
 
-import yagmail
 from pymeso.instruments import Instrument
-import time
-from datetime import datetime
-from IPython import get_ipython
-from pymeso.panel_experiment_interface import Panel_Interface_Exp
-from threading import Thread
-from datetime import datetime
+import smtplib,email
 
 class Mail_Sender(Instrument):
     """ 
-        Instrument used to send mails programatically.
+        Instrument used to send mails programmatically.
         
         ATTRIBUTES :
-            The default mailing list is defined in 'to'.
-            The default subject is defined in 'subject'.
-            The default message is defined in 'message'.
+            notify_list : email list used for notification
+            warning_list : email list used for warning
         
         FUNCTIONS : 
-            - send : to send a message
-            - wait_and_send : wait and send a message
+            - notify : send a message to notify_list
+            - warning : send a message to warning_list
             
         EXAMPLEs : 
-            to = 'aa@aa.aa'
-            subject = 'Test'
-            body = "'This is a test'"
-            from pymeso.instruments.utils.email_sender import Mail_Sender
-            sender=Mail_Sender(to,subject,body)
+            mailer=Mail_Sender('smtp.aa.aa',25)
+            mailer.notify_list=['aa@aa.aa']
+            mailer.warning_list=['aa@aa.aa','bb@bb.bb']
+            
+            mailer.notify("This is the notification message.")
+            mailer.warning("This is the warning message")
     """
 
-    def __init__(self,to=None,subject=None,message=None):
-        # use gmail account. It should have been registered before
-        self.mailer=yagmail.SMTP('bluefors.fridge.meso.lps')
-        self.to=to
-        self.subject=subject
-        self.message=message
-        # define the ipython shell and define globals
-        self.ip=get_ipython()
-        
-    def send(self,to=None,subject=None,message=None):
-        """
-            Send a message to 'to' with a subject 'subject' and a message 'message'.
-            If no value is provided the default value are used.
-            The 'message' should generate a regular string when evaluated by the python function 'eval'.
-        """
-        env_dict=self.ip.user_global_ns
-        if to==None:
-            to=self.to
-        if subject==None:
-            subject=self.subject
-        if message==None:
-            message=self.message
-        # evaluate the message of the mailer
-        try:
-            body=eval(message,env_dict)
-        except:
-            body='Invalid message for this email'
-        try:
-            if to != None:
-                self.mailer.send(to=to, subject=subject, contents=body)
-        except:
-            pass
-            
-    def work_wait(self,value,N=1,to=None,subject=None,message=None,dict=None,interface=None,batch=False):
-        """
-            Internal function used for multithreading with wait_and_send.
-        """
-        #if value in (int,float):
-        for i in range(N):
-            if N>1:
-                init_string=str(i)+'/'+str(N)+': '
-            else:
-                init_string=''
-            t0=time.time()
-            t_pause=0
-            if type(value) in (float,int):
-                valid=True
-                remain=lambda x : x-(time.time()-t0)
-                cond=lambda x : remain(x) < 0
-                cond_str=lambda x : 'remaining time = {:.1f}'.format(remain(x))
-            elif type(value) is str:
-                cond=lambda x : eval(x,dict)
-                cond_str=lambda x : 'the condition '+x+' is not fullfilled yet.'
-                try:
-                    valid=cond(value)
-                    valid=True
-                except:
-                    valid=False
-            else:
-                valid=False
-            while valid and not(cond(value)):
-                interface.set_text(init_string+cond_str(value))
-                t0_pause=time.time()
-                while interface.should_pause.is_set():                            
-                    if interface.should_stop.is_set(): 
-                        break
-                    time.sleep(0.1)
-                    t_pause=time.time()-t0_pause
-                if interface.should_stop.is_set(): 
-                    break
-                t0+=t_pause
-                t_pause=0
-                time.sleep(0.1)
-                
-            if interface.should_stop.is_set(): 
-                break    
-            else:
-                self.send(to,subject,message)
-                time.sleep(1)
-        interface.set_text(' Message(s) sent !','')
-        
-        # Close the interface if not in batch mode otherwise use clear_for_batch
-        if batch:
-            interface.clear_for_batch()
-        else:    
-            interface.finished()
-    
-    def wait_and_send(self,value,N=1,to=None,subject=None,message=None,batch=False,interface=None):
-        """
-            Wait during the time 'value' (in seconds) or until the condition 'value' (described by a string) is fulfilled
-            and then send the message. The same operation can be repetead N times (default = 1, max =10).
-            
-            EXEMPLES:
-                sender.wait_and_send(5,message="'Les nouvelles valeurs sont'+str((test.dac2,test.dac3))")
-                sender.wait_and_send(5,10,message="'This is the message'")
-                sender.wait_and_send('test.dac2>5.23',message="'This is the message'")
-        """
-        dict=self.ip.user_global_ns
-        if type(value) in (float,int):
-            valid=True
-        elif type(value) is str:
-            cond=lambda x : eval(x,dict)
-            try:
-                valid=eval(value,dict)
-                valid=True
-            except:
-                valid=False
-                return('The condition is not valid.')
+    def __init__(self,smptp_server,port,notify=[],warning=[],domain=None,sender=None,experiment=None):
+        self.server=smptp_server
+        self.port=port
+        if domain==None:
+            self.domain=self.server[5:]
         else:
-            valid=False
-            return('The condition has not a valid format.')
-        N=max(int(N),1)
-        N=min(10,N) # maximum number of attemps = 10
+            self.domain=domain
+            
+        if sender==None:
+            self.sender='manip.meso'
+        else:
+            self.sender=str(sender)
+        if experiment==None:
+            self.experiment=''
+        else:
+            self.experiment=str(experiment)+' : '
+            
+        self._notify_list=notify
+        self._warning_list=warning
         
-        if valid:
-            # Create the interface if not provided
-            if interface==None:
-                interface=Panel_Interface_Exp()
-            interface.set_text(str(value),'Wait and send message')
-            
-            # Start the wait procedure in a different thread
-            args=(value,)
-            kwargs={'N':N,'to':to,'subject':subject,'message':message,'batch':batch,'interface':interface,'dict':dict} 
-            thread_wait = Thread(name='Wait and send',target=self.work_wait, args=args, kwargs = kwargs)
-            thread_wait.start()
-                        
-            # Wait for the end of the thread in batch mode
-            if batch:
-                thread_wait.join()
-            
+    @property    
+    def notify_list(self):
+        """
+            Return or set the emails list for notification
+        """
+        return self._notify_list
     
+    @notify_list.setter
+    def notify_list(self,value):
+        """
+            Return or set the emails list for notification
+        """
+        self._notify_list=value
+        
+    @property    
+    def warning_list(self):
+        """
+            Return or set the emails list for notification
+        """
+        return self._warning_list
     
-
- 
+    @warning_list.setter
+    def warning_list(self,value):
+        """
+            Return or set the emails list for notification
+        """
+        self._warning_list=value
+        
+    def notify(self,message,subject=None):
+        """
+            Send a message to the email list define in notify_list
+        """
+        # beware to the point . ! No special character !
+        msg_text=str(message)
+        if msg_text[-1:]!='.':
+            msg_text+='.'
+        from_addr=self.sender+'@'+self.domain
+        msg = email.message.Message()
+        msg['message-id'] = email.utils.make_msgid(domain=self.domain)
+        subj=self.experiment
+        if subject==None:
+            subj+='Experiment Notification'
+        else:
+            subj+=str(subject)
+        msg['Subject']=subj
+        msg['From'] = from_addr
+        msg['To'] = ",".join(self.notify_list)
+        msg.add_header('Content-Type', 'text/html')
+        msg.set_payload(msg_text)
+        if len(self.notify_list)>0:
+            with smtplib.SMTP(self.server,self.port) as server:
+                server.sendmail(from_addr, self.notify_list, msg.as_string())
+        else:
+            print('Notification list is empty')
+                    
+    def warning(self,message,subject=None):
+        """
+            Send a message to the email list define in warning_list
+        """
+        # beware to the point . ! No special character !
+        msg_text=str(message)
+        if msg_text[-1:]!='.':
+            msg_text+='.'
+        from_addr=self.sender+'@'+self.domain
+        msg = email.message.Message()
+        msg['message-id'] = email.utils.make_msgid(domain=self.domain)
+        subj=self.experiment
+        if subject==None:
+            subj+='Experiment Warning'
+        else:
+            subj+=str(subject)
+        msg['Subject']=subj
+        msg['From'] = from_addr
+        msg['To'] = ",".join(self.warning_list)
+        msg.add_header('Content-Type', 'text/html')
+        msg.set_payload(msg_text)
+        
+        if len(self.warning_list)>0:
+            with smtplib.SMTP(self.server,self.port) as server:
+                server.sendmail(from_addr, self.warning_list, msg.as_string())
+        else:
+            print('Warning list is empty')
             
-            
-           
