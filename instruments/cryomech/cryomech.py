@@ -35,8 +35,10 @@ import socket
 import signal
 import datetime
 import json
+from threading import Thread
 from pymeso.instruments import Instrument
-from pymeso.instruments.utils import Device_gui
+from pymeso.instruments.utils import Device_gui 
+from pymeso.utils import message_box
 
 class PTC(Instrument):
     """ 
@@ -47,13 +49,23 @@ class PTC(Instrument):
         cryo.get_data()                        # return data from the Cryomech compressor 
     """
     
-    def __init__(self, ip_address, port=502, timeout=10):
+    def __init__(self, ip_address, port=502, timeout=10, warning=None):
         self.ip_address = ip_address
         self.port = port
-
+        self._no_warning=True
+        self._continue=True
+        self.safety=True
+        # function used to send a warning message
+        self.warning=warning
+        
+        # Connect to the compressor
         self.comm = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.comm.connect((self.ip_address, self.port))  # connects to the PTC
         self.comm.settimeout(timeout)
+        
+        # Launch safety thread
+        self.safety_thread=Thread(target=self.work_check_safety,name='PT compressor safety thread')
+        self.safety_thread.start()
 
     def get_data(self):
         """
@@ -199,7 +211,7 @@ class PTC(Instrument):
         # If there is an error in the string format, print the
         # error to logs, return an empty dictionary, and flag the data as bad
         data = {}
-        data["datetime"] = datetime.datetime.now().replace(microsecond=0).isoformat()
+        data["datetime"] = datetime.datetime.now().isoformat()
         try:
             for key in keyloc.keys():
                 locs = keyloc[key]
@@ -272,28 +284,40 @@ class PTC(Instrument):
     def get_data_dict(self):
         """ Get some data and generate a dict"""
         data_dict={}
-        data_dict['Parameters']=self.get_data()[1]
+        data_dict['PT Compressor']=self.get_data()[1]
         return(data_dict)
         
     def gui(self,name=None):
         """Create a GUI based on get_data_dict() """
         if name==None:
-            name='Pulse Tube Compressor'
+            name='Parameters'
         local_gui=Device_gui(name)
-        local_gui.start(self.get_data_dict,wait=5.0) 
+        local_gui.start(self.get_data_dict,wait=5.0)
 
+    # Function used for safety
+    def work_check_safety(self):
+        """Internal function to detect an anomaly on the compressor."""
+        while self._continue:
+            data=self.get_data()[1]
+            if data["Warning State"]=="No warnings":
+                if self._no_warning:
+                    message='WARNING from PT compressor : '+data["Warning State"]
+                    message_box(message)
+                    # use warning procedure (ex : mail_sender) to send a message
+                    try:
+                        self.warning(message)
+                    except:
+                        pass
+                    #print(data["Warning State"])
+                    self._no_warning=False
+                self.safety=False
+            else: 
+                self._no_warning=True
+                self.safety=True
+            time.sleep(1.0)    
+            
 def main():
-    parser = argparse.ArgumentParser(
-        description="Dump Cryomech Data",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument("--ip", type=str, help="IP of cryomech device", required=True)
-    parser.add_argument("--port", type=int, default=502, help="port for ModBusTCP")
-
-    args = parser.parse_args()
-    ptc = PTC(ip_address=args.ip, port=args.port)
-    print(json.dumps(ptc.get_data()[1]))
-
+    print('This is the PTC driver')
 
 if __name__ == "__main__":
     main()
