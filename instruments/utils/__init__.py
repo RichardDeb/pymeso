@@ -34,4 +34,6 @@ from .thermometer import Thermometer
 from .magnetic_field import Field
 from .timer import Timer
 from .rotate import Rotate
+from .email_sender import Mail_Sender
+
 
