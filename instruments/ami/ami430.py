@@ -80,22 +80,21 @@ class AMI430(Instrument):
         # Read twice in order to remove welcome/connect message
         self.read()
         self.read()
-
-        # initialiez some values needed for handling the sweeps
+        # initialize some values needed for handling the sweeps
         self._pause_state=False
         self._start=0.0
         self._stop=1.0
         self._progress=0.0
-        
         # maximum field
         self.field_limit=self.current_limit*self.coilconst
-        
         # dictionnary used for value checking
         self.checking={}
         self.checking['field']=lambda x: abs(x) <= self.field_limit
         self.checking['target_field']=lambda x: abs(x) <= self.field_limit
-        
-
+        # Launch safety thread
+        self.safety_thread=Thread(target=self.work_check_safety,name='AMI Magnet power supply safety thread')
+        self.safety_thread.start()
+     
     coilconst = Instrument.control(
         "COIL?", "CONF:COIL %g",
         """ A floating point property that sets the coil contant
@@ -295,4 +294,23 @@ class AMI430(Instrument):
         dico['current_limit']=self.current_limit
         dico['coilconst']=self.coilconst
         return(dico)
+        
+    # Function used for safety
+    def work_check_safety(self):
+        """Internal function to detect an anomaly"""
+        previous_message=1
+        while self._continue:
+            warning_message=self.state
+            if warning_message!=previous_message and warning_message==7:
+                message='WARNING from magnet power supply {}\n'.format(self.adapter.resource_name)
+                    +datetime.now().strftime("%d/%m/%Y, %H:%M:%S: ")+'Quench !'
+                message_box(message)
+                # use warning procedure (ex : mail_sender) to send a message
+                try:
+                    self.warning(message)
+                except:
+                    pass
+            previous_message=warning_message
+            self.safety=(warning_message!=7)
+            time.sleep(5.0)
         
