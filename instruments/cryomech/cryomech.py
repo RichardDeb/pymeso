@@ -297,24 +297,22 @@ class PTC(Instrument):
     # Function used for safety
     def work_check_safety(self):
         """Internal function to detect an anomaly on the compressor."""
+        previous_message="No warnings"
         while self._continue:
             data=self.get_data()[1]
-            if data["Warning State"]=="No warnings":
-                if self._no_warning:
-                    message='WARNING from PT compressor : '+data["Warning State"]
-                    message_box(message)
-                    # use warning procedure (ex : mail_sender) to send a message
-                    try:
-                        self.warning(message)
-                    except:
-                        pass
-                    #print(data["Warning State"])
-                    self._no_warning=False
-                self.safety=False
-            else: 
-                self._no_warning=True
-                self.safety=True
-            time.sleep(1.0)    
+            warning_message=data["Warning State"]
+            if warning_message!=previous_message:
+                message='WARNING from PT compressor\n'+datetime.now().strftime("%d/%m/%Y, %H:%M:%S: ")+warning_message
+                message_box(message)
+                # use warning procedure (ex : mail_sender) to send a message
+                try:
+                    self.warning(message)
+                except:
+                    pass
+                #print(data["Warning State"])
+                previous_message=warning_message
+                self.safety=(warning_message=="No warnings")
+            time.sleep(5.0)  
             
 def main():
     print('This is the PTC driver')
