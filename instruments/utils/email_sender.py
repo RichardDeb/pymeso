@@ -25,6 +25,7 @@
 
 from pymeso.instruments import Instrument
 import smtplib,email
+from email.mime.text import MIMEText
 
 class Mail_Sender(Instrument):
     """ 
@@ -99,12 +100,10 @@ class Mail_Sender(Instrument):
         """
             Send a message to the email list define in notify_list
         """
-        # beware to the point . ! No special character !
-        msg_text=str(message)
-        if msg_text[-1:]!='.':
-            msg_text+='.'
+        text=str(message)
+        text_type = 'plain' # or 'html'
+        msg = MIMEText(text, text_type, 'utf-8')
         from_addr=self.sender+'@'+self.domain
-        msg = email.message.Message()
         msg['message-id'] = email.utils.make_msgid(domain=self.domain)
         subj=self.experiment
         if subject==None:
@@ -114,11 +113,10 @@ class Mail_Sender(Instrument):
         msg['Subject']=subj
         msg['From'] = from_addr
         msg['To'] = ",".join(self.notify_list)
-        msg.add_header('Content-Type', 'text/html')
-        msg.set_payload(msg_text)
+        # msg.add_header('Content-Type', 'text/html')
         if len(self.notify_list)>0:
             with smtplib.SMTP(self.server,self.port) as server:
-                server.sendmail(from_addr, self.notify_list, msg.as_string())
+                server.send_message(msg)
         else:
             print('Notification list is empty')
                     
@@ -126,12 +124,10 @@ class Mail_Sender(Instrument):
         """
             Send a message to the email list define in warning_list
         """
-        # beware to the point . ! No special character !
-        msg_text=str(message)
-        if msg_text[-1:]!='.':
-            msg_text+='.'
+        text=str(message)
+        text_type = 'plain' # or 'html'
+        msg = MIMEText(text, text_type, 'utf-8')
         from_addr=self.sender+'@'+self.domain
-        msg = email.message.Message()
         msg['message-id'] = email.utils.make_msgid(domain=self.domain)
         subj=self.experiment
         if subject==None:
@@ -141,12 +137,10 @@ class Mail_Sender(Instrument):
         msg['Subject']=subj
         msg['From'] = from_addr
         msg['To'] = ",".join(self.warning_list)
-        msg.add_header('Content-Type', 'text/html')
-        msg.set_payload(msg_text)
-        
-        if len(self.warning_list)>0:
+        # msg.add_header('Content-Type', 'text/html')
+        if len(self.notify_list)>0:
             with smtplib.SMTP(self.server,self.port) as server:
-                server.sendmail(from_addr, self.warning_list, msg.as_string())
+                server.send_message(msg)
         else:
-            print('Warning list is empty')
+            print('Notification list is empty')
             
