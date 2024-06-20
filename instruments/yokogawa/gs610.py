@@ -29,9 +29,6 @@ import numpy as np
 from pymeso.instruments import Instrument
 from pymeso.instruments.validators import strict_discrete_set, truncated_discrete_set, truncated_range
 
-MIN_RAMP_TIME = 0.1  # seconds
-
-
 class GS610(Instrument):
     """ 
         Represents the Yokogawa GS610 source and provides a high-level interface for interacting with the instrument.
@@ -44,6 +41,7 @@ class GS610(Instrument):
         yoko.source_enabled=True                    # enable source
         yoko.voltage=1.53                           # set voltage to 1.53V
         yoko.level=1.53                             # set output to 1.53 (depends on mode)
+        yoko.stored_value                           # return the last measured value
     """
 
     source_enabled = Instrument.control("OUTPut:STATe?", "OUTPut:STATe %d",
@@ -62,16 +60,16 @@ class GS610(Instrument):
                                       validator=truncated_discrete_set,
                                       values=[200e-3, 2, 12, 20, 30, 60, 110])
                                       
-    voltage = Instrument.control(":SOUR:VOLT:LEV?", ":SOUR:VOLT:LEV %g",
-                                      """Floating point number that sets the output voltage .""")                               
+    # voltage = Instrument.control(":SOUR:VOLT:LEV?", ":SOUR:VOLT:LEV %g",
+                                      # """Floating point number that sets the output voltage .""")                               
                                       
     current_range = Instrument.control(":SOUR:CURR:RANG?", ":SOUR:CURR:RANG %g",
                                       """Floating point number that controls the range of the output in current mode""",
                                       validator=truncated_discrete_set,
                                       values=[2e-6, 200e-6, 2e-3, 20e-3, 200e-3, 0.5, 1,2,3])
                                       
-    current = Instrument.control(":SOUR:CURR:LEV?", ":SOUR:CURR:LEV %g",
-                                      """Floating point number that sets the output current""")                         
+    # current = Instrument.control(":SOUR:CURR:LEV?", ":SOUR:CURR:LEV %g",
+                                      # """Floating point number that sets the output current""")                         
 
     def __init__(self, adapter, **kwargs):
         super(GS610, self).__init__(
@@ -79,6 +77,9 @@ class GS610(Instrument):
         )
         self._pause_state=False
         self._mode=self.mode
+        
+        # Init store points
+        self.write('TRAC:POIN 1')
         
         # dictionnary used for value checking
         self.checking={}
@@ -123,6 +124,36 @@ class GS610(Instrument):
             self.voltage_range=value
             
     @property
+    def output(self):
+        """A boolean property that controls whether the source is enabled.
+           Takes values True or False. """
+        return(self.source_enabled)
+    
+    @output.setter
+    def output(self,value):
+        self.source_enabled=value
+            
+    @property
+    def voltage(self):
+        """Floating point number that sets the output voltage ."""
+        return float(self.ask(":SOUR:VOLT:LEV?"))
+        
+    @voltage.setter    
+    def voltage(self,value):
+        self.write(":SOUR:VOLT:LEV {}".format(value))
+        self.write(':TRAC:STAT 1')
+            
+    @property
+    def current(self):
+        """Floating point number that sets the output current ."""
+        return float(self.ask(":SOUR:CURR:LEV?"))
+        
+    @current.setter    
+    def current(self,value):
+        self.write(":SOUR:CURR:LEV {}".format(value))
+        self.write(':TRAC:STAT 1')
+    
+    @property
     def level(self):
         if self._mode=='current':
             return(self.current)
@@ -135,14 +166,29 @@ class GS610(Instrument):
             self.current=value
         else:
             self.voltage=value
+    
+    @property
+    def stored_value(self):
+        """
+            Return the last measured value
+        """
+        return float(self.ask('TRAC:CALC:AVER?'))
         
     # return configuration
     def read_config(self):
-        """ return a configuration dict for the SRS830"""
+        """ return a configuration dict"""
         dico={'Id':'YokogawaGS610','adapter':self.adapter.resource_name}
         dico['mode']=self.mode
         dico['range']=self.range
         return(dico)
+        
+    # check validity of the config
+    def check_config(self):
+        """ check if the config is valid. Return (validity,message)"""
+        if not(self.source_enabled):
+            return (False,"Output is switched off")
+        else:
+            return (True,"")
             
 
 
