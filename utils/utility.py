@@ -26,7 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
-import time
+import time, subprocess, platform
 import numpy as np
 import pandas as pd
 from PyQt5 import QtWidgets
@@ -34,6 +34,21 @@ import re
 from queue import Queue
 from threading import Thread, Event
 import matplotlib.pyplot as plt
+
+
+def message_box(message):
+    os_system=platform.system()
+    if os_system=='Windows': 
+        # os = windows
+        subprocess.run(['msg','*','/TIME:0',message])
+    elif os_system=='Linux':
+        # os = linux
+        print(message)
+    elif os_system=='Darwin': 
+        # os = Mac
+        print(message)
+    else:
+        pass
 
 class Alias(object):
     """
