@@ -392,7 +392,7 @@ class Panel_Interface_Exp(object):
     def plot_data(self,*args):
         data=pd.read_csv(self._file,comment='#',header=0)
         data.insert(0,'Index',list(range(len(data))))
-        fig = Figure()
+        fig = Figure(dpi=150)
         if self.zdata.value[0] == "None": # case of regular figure
             if self.plot_multi.value:
                 ax=fig.subplots(len(self.ydata.value),1)
@@ -403,11 +403,11 @@ class Panel_Interface_Exp(object):
                         ax[i].grid()
             else:
                 ax=fig.subplots()
-                fig.set_size_inches(4, 3)
+                fig.set_size_inches(4, 2.5)
                 for ycol in self.ydata.value:
                     ax.plot(data[self.xdata.value],data [ycol],label=ycol)
                     ax.set(xlabel=self.xdata.value)
-                ax.legend()
+                ax.legend(fontsize = '6')
                 ax.grid()
         else: # case of image figure
            # X data range
