@@ -27,7 +27,7 @@
 import logging,time
 import ipywidgets as widgets
 from pymeso.utils import Measurement
-from pymeso.panel_experiment_interface import Panel_Interface_Exp
+from pymeso.experiment_interface import Panel_Interface_Exp
 from threading import Thread
 
 class OutputWidgetHandler(logging.Handler):
