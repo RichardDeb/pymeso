@@ -4,8 +4,6 @@
 # Copyright (c) R. Deblock, Mesoscopic Physics Group 
 # Laboratoire de Physique des Solides, Université Paris-Saclay, Orsay, France.
 #
-# Part of the code of this file comes from the PyMeasure package 
-# (Copyright (c) 2013-2020 PyMeasure Developers)
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -128,8 +126,8 @@ class Macrt(Instrument):
         """
         while self._running:
             for i,client in enumerate((self.mmr3_LT,self.mmr3_HT,self.mmr3_Mag)):
-                values_dict=self.get_values_MMR3(client)
                 try:
+                    values_dict=self.get_values_MMR3(client)
                     if i==0:    # for Low Temp MMR3
                         self._R_MC_RuO2=values_dict['R1']
                         self._T_MC_RuO2=values_dict['T1']
