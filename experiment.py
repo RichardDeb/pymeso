@@ -38,6 +38,7 @@ from .experiment_interface import Panel_Interface_Exp,Panel_message
 from .hal import Hal_interpreter
 from pymeso.utils import Measurement,Spy,myTimer,Sweep,Data_Saver,ExperimentError,Plotter,Alias
 from pymeso.utils import LinSweep,LinSteps,ArraySteps
+from pymeso.utils import Plotter_in_Notebook
 
 class Experiment(object):
     """
@@ -1492,6 +1493,12 @@ class Experiment(object):
         measure_function.close()
         
         return(measurement)
+        
+    def plot(self,file):
+        """
+            Plot data from file in a Jupyter notebook cell
+        """
+        _plot=Plotter_in_Notebook(file)
         
 if __name__ == "__main__":
     print('This is the Experiment class')
