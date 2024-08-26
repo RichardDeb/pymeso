@@ -55,7 +55,7 @@ class SR865A(Instrument):
         200e-6, 500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3,
         50e-3, 100e-3, 200e-3, 500e-3, 1
     ]
-    SENSITIVITIES.reversed()
+    SENSITIVITIES.reverse()
     
     TIME_CONSTANTS = [
         1e-6, 3e-6, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3,
@@ -102,7 +102,7 @@ class SR865A(Instrument):
         """ A floating point property that represents the lock-in phase
         in degrees. This property can be set. """,
         validator=truncated_range,
-        values=[−360000, 360000]
+        values=[-360000, 360000]
     )
     
     x = Instrument.measurement("OUTP? X",
@@ -280,7 +280,7 @@ class SR865A(Instrument):
     @property
     def signal_input(self):
         """ Reads the signal input state"""
-        if int(self.ask("SYNC?"))==0:
+        if int(self.ask("IVMD?"))==0:
             return('voltage')
         else:
             return('current')
@@ -288,27 +288,27 @@ class SR865A(Instrument):
     @property
     def voltage_input_mode(self):
         """ Reads the signal input voltage state"""
-        return INPUT_CONFIGS[int(self.ask("ISRC?"))]
+        return self.INPUT_CONFIGS[int(self.ask("ISRC?"))]
         
     @property
     def voltage_input_grounding(self):
         """ Reads the signal input voltage grounding"""
-        return INPUT_GROUNDINGS[int(self.ask("IGND?"))]
+        return self.INPUT_GROUNDINGS[int(self.ask("IGND?"))]
     
     @property
     def voltage_input_coupling(self):
         """ Reads the signal input voltage coupling"""
-        return INPUT_COUPLINGS[int(self.ask("ICPL?"))]
+        return self.INPUT_COUPLINGS[int(self.ask("ICPL?"))]
         
     @property
     def voltage_input_range(self):
         """ Reads the signal input voltage range"""
-        return INPUT_RANGES[int(self.ask("IRNG?"))]
+        return self.INPUT_RANGES[int(self.ask("IRNG?"))]
         
     @property
     def current_input_range(self):
         """ Reads the signal input current range"""
-        return CURRENT_RANGES[int(self.ask("ICUR?"))]
+        return self.CURRENT_RANGES[int(self.ask("ICUR?"))]
         
     @property
     def signal_strength_indicator(self):
@@ -338,7 +338,7 @@ class SR865A(Instrument):
 
     @property
     def x_expand(self):
-        return EXPANSION_VALUES[int(self.ask('CEXP? 0'))]
+        return self.EXPANSION_VALUES[int(self.ask('CEXP? 0'))]
         
     @property
     def x_offset(self):
@@ -350,7 +350,7 @@ class SR865A(Instrument):
         
     @property
     def y_expand(self):
-        return EXPANSION_VALUES[int(self.ask('CEXP? 1'))]
+        return self.EXPANSION_VALUES[int(self.ask('CEXP? 1'))]
         
     @property
     def y_offset(self):
@@ -362,7 +362,7 @@ class SR865A(Instrument):
         
     @property
     def r_expand(self):
-        return EXPANSION_VALUES[int(self.ask('CEXP? 2'))]
+        return self.EXPANSION_VALUES[int(self.ask('CEXP? 2'))]
         
     @property
     def r_offset(self):
@@ -374,7 +374,7 @@ class SR865A(Instrument):
         
     @property
     def reference_source(self):
-        return REFERENCE_SOURCES[int(self.ask('RSRC?'))]
+        return self.REFERENCE_SOURCES[int(self.ask('RSRC?'))]
     
     # return configuration
     def read_config(self):
@@ -392,15 +392,15 @@ class SR865A(Instrument):
         dico['Igain']=self.current_input_range
         dico['CH1']=self.ch1
         dico['CH2']=self.ch2
-        dico['Xexpand']==self.x_expand
-        dico['Xoffset']==self.x_offset 
-        dico['Xpercent']==self.x_percent
-        dico['Yexpand']==self.y_expand
-        dico['Yoffset']==self.y_offset 
-        dico['Ypercent']==self.y_percent
-        dico['Rexpand']==self.r_expand
-        dico['Roffset']==self.r_offset 
-        dico['Rpercent']==self.r_percent
+        dico['Xexpand']=self.x_expand
+        dico['Xoffset']=self.x_offset 
+        dico['Xpercent']=self.x_percent
+        dico['Yexpand']=self.y_expand
+        dico['Yoffset']=self.y_offset 
+        dico['Ypercent']=self.y_percent
+        dico['Rexpand']=self.r_expand
+        dico['Roffset']=self.r_offset 
+        dico['Rpercent']=self.r_percent
         dico['amplitude']=self.sine_voltage
         dico['offset']=self.sine_offset
         dico['frequency']=self.frequency
