@@ -27,4 +27,5 @@
 #
 
 from .macrt import Macrt
+from .mmr3 import MMR3
 
