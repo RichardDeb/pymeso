@@ -28,4 +28,6 @@
 
 from .macrt import Macrt
 from .mmr3 import MMR3
+from .mgc3 import MGC3
+
 
