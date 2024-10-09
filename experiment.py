@@ -31,8 +31,10 @@ from datetime import datetime
 from queue import Queue
 from threading import Thread, Event
 from IPython import get_ipython
+from IPython.display import Markdown
 from PyQt5.QtWidgets import QFileDialog
 import gzip,bz2,lzma
+import panel as pn
 
 from .experiment_interface import Panel_Interface_Exp,Panel_message
 from .hal import Hal_interpreter
@@ -69,7 +71,7 @@ class Experiment(object):
 
     """
     
-    def __init__(self,wait_time=1.0,init_wait=1.0,measure={},path='./',logfile='experiment_logfile.log'):
+    def __init__(self,wait_time=1.0,init_wait=1.0,measure={},path='./',logfile='experiment_logfile.log',panel_server=True):
         """
             Initialisation
         """
@@ -104,7 +106,18 @@ class Experiment(object):
         # set register and measure
         self.register={}
         self.measure=measure
-            
+        
+        # define the general Panel Server
+        if panel_server:
+            self.panel_server=pn.Column('# PYMESO PANEL')
+            pn.serve(self.panel_server,port=5009,threaded=True,show=False,title="Pymeso Processes",verbose=False)
+            message="Pymeso panel at [http://localhost:5009](http://localhost:5009/) <br> "+"Logfile is {}".format(logfile)
+            display(Markdown(message))
+        else:
+            self.panel_server=None
+            message="Logfile is {}".format(logfile)
+            display(Markdown(message))
+        
     def format_measure(self,meas):
         new_measure={}
         for key in meas.keys():
@@ -589,7 +602,7 @@ class Experiment(object):
         if not(error) and run:
             # launch the task list
             # Create the batch interface
-            interface=Panel_Interface_Exp(batch=True)
+            interface=Panel_Interface_Exp(batch=True,PanelServer=self.panel_server)
             interface.set_batch_text('',message)
             
             # Create the thread to launch the list of command
@@ -850,7 +863,7 @@ class Experiment(object):
         
         # Create the interface if not provided
         if interface==None:
-            interface=Panel_Interface_Exp()
+            interface=Panel_Interface_Exp(PanelServer=self.panel_server)
         
         # Set the text of the interface
         if config_info != None:
@@ -1157,7 +1170,7 @@ class Experiment(object):
         if not(error) and run:
             # Create the interface if not provided
             if interface==None:
-                interface=Panel_Interface_Exp()
+                interface=Panel_Interface_Exp(PanelServer=self.panel_server)
        
             # Lock devices 
             for i in range(Nstepper):
@@ -1247,7 +1260,7 @@ class Experiment(object):
                             config_info=config_info)
             else:
                 if interface==None:
-                    interface=Panel_Interface_Exp()
+                    interface=Panel_Interface_Exp(PanelServer=self.panel_server)
                 interface.set_text(config_info[1],config_info[0])
                 if batch:
                     interface.clear_for_batch()
@@ -1365,7 +1378,7 @@ class Experiment(object):
             self.logger.info('\n# {} {}\n'.format('Wait',value))
             # Create the interface if not provided
             if interface==None:
-                interface=Panel_Interface_Exp()
+                interface=Panel_Interface_Exp(PanelServer=self.panel_server)
             interface.set_text(str(value),'Wait')
             
             # Start the wait procedure in a different thread
