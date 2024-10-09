@@ -49,7 +49,7 @@ class Panel_Interface_Exp(object):
         Class used to generate the interface of the experiment with Panel
     """
     
-    def __init__(self,batch=False,interface=None):
+    def __init__(self,batch=False,interface=None,PanelServer=None):
         # create the stepper dict
         self.step_dict={}
         # message to display by the interface
@@ -58,6 +58,13 @@ class Panel_Interface_Exp(object):
             # Event to handle the stop and pause function
             self.should_stop=Event()
             self.should_pause=Event()
+            # panel in the initial notebook
+            date_string=datetime.now().strftime("%d/%m/%Y at %H:%M:%S")
+            message='**Executing instruction started the '+date_string+' ...**'
+            self.notebook_panel=pn.Column(pn.pane.Markdown(message,width=590))
+            self._panelserver=(PanelServer!=None)
+            self.server=PanelServer
+            # Panel elements that will be shown in the PanelServer 
             # batch panel
             self.batchpanel=pn.Column()
             # main panel
@@ -65,9 +72,18 @@ class Panel_Interface_Exp(object):
             # plot panel
             self.plotpanel=pn.Column()
             # display
-            self.main=pn.Column(self.batchpanel,self.mainpanel,self.plotpanel).servable()
-            display(self.main)
-            time.sleep(0.2)
+            title='### Intruction started the '+date_string
+            self.main=pn.Column(title,self.batchpanel,
+                                self.mainpanel,self.plotpanel,pn.layout.Divider())
+            self.PanelServer=PanelServer
+            if self._panelserver:
+                display(self.notebook_panel)
+                time.sleep(0.2)
+                PanelServer.append(self.main)
+            else:
+                display(self.main)
+                time.sleep(0.2)
+                
             # logger
             self.logger=logging.getLogger(__name__)
             self.logger.setLevel(logging.INFO)
@@ -492,21 +508,32 @@ class Panel_Interface_Exp(object):
         if stopped:
             value_string='Stopped, '+value_string
         
-        #clear interface
+        # clear interface
         self.main.clear()
+        self.notebook_panel.clear()
         time.sleep(0.2)
         # write last message
         message='**Task done the '+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+' :** <br>'+value_string
-        self.main.append(pn.pane.Markdown(message,width=590))
-        time.sleep(0.2)
+        if self._panelserver:
+            self.notebook_panel.append(pn.pane.Markdown(message,width=590))
+            time.sleep(0.2)
+        else: 
+            self.main.append(pn.pane.Markdown(message,width=590))
+            time.sleep(0.2)
         # if plotting asked, do the plot
         try:
             if self.plot_option.value:
                 self.plt_panel.clear()
-                self.main.append(self.plt_panel)
+                if self._panelserver:
+                    self.notebook_panel.append(self.plt_panel)
+                else:
+                    self.main.append(self.plt_panel)
                 self.plot_data()
         except:
             pass
+        # remove main panel from the panel server
+        if self._panelserver:
+            self.server.remove(self.main)       
         # Log info about finish
         logging.info('\n#{} \n'.format(message))
  
