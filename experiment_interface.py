@@ -26,15 +26,246 @@ import logging
 import numpy as np
 import pandas as pd
 import time
+import subprocess, platform
 import panel as pn
 from bokeh.models.formatters import PrintfTickFormatter
 from threading import Thread, Event
 # from IPython.display import display
 from datetime import datetime
-import pyperclip,os
+import pyperclip,os,inspect,io
+from subprocess import Popen
 import gzip,bz2,lzma
 from matplotlib.figure import Figure
+from IPython.display import Markdown,Image,display
+from IPython import get_ipython
+from pymeso.utils import Measurement,Alias
 
+class Fake_Measurement(object):
+    """
+        Class used if measure for monitor is {}
+    """
+    def __init__(self,*args,**kwargs):
+        pass
+        
+    def take(self):
+        return pd.DataFrame({})
+        
+    def close(self):
+        pass
+
+class Monitor_Interface(object):
+    """
+        Class used to have a Monitor interface 
+    """
+    def __init__(self,measure={},format='line',check=[],warning=[]):
+        self.ip=get_ipython()
+        self.check_panel=pn.Column()
+        self.tabular=pn.pane.DataFrame(pd.DataFrame({}),sizing_mode="stretch_both", max_height=300,max_width=600)
+        self.monitor_panel=pn.Column(self.tabular,self.check_panel)
+        # display(self.monitor_panel)
+        self.set_measure(measure)
+        self.format=format
+        self.check=check
+        self._continue=True
+        self._warning=warning
+        args=()
+        monitor_thread=Thread(name='Monitor Thread',target=self.monitor_work,args=args)
+        monitor_thread.start()
+    
+    def message_box(self,message):
+        os_system=platform.system()
+        if os_system=='Windows': 
+            # os = windows
+            subprocess.run(['msg','*','/TIME:0',message])
+            time.sleep(0.1)
+        elif os_system=='Linux':
+            # os = linux
+            print(message)
+        elif os_system=='Darwin': 
+            # os = Mac
+            print(message)
+        else:
+            pass
+    
+    @property
+    def warning(self):
+        """
+            Read or set a warning function used with a message when a condition is True
+        """
+        return self._warning
+        
+    @warning.setter
+    def warning(self,value):
+        if type(value) in (list,tuple):
+            self._warning=list(value)
+        else:
+            self._warning=[value]
+    
+    @property
+    def format(self):
+        return self._format
+    
+    @format.setter
+    def format(self,value):
+        if value in ('line','line_multi','col','col_multi'):
+            self._format=value
+        else:
+            self._format='line'
+        self.set_measure(self.measure)
+    
+    @property
+    def measure(self):
+        return self._measure
+    
+    @measure.setter
+    def measure(self,value):
+        self.set_measure(value)
+        
+    @property
+    def check(self):
+        return self._check
+        
+    @check.setter
+    def check(self,value):
+        self._globals=self.ip.user_global_ns
+        ans=[]
+        # check the validity of the condition list
+        error=False
+        for k in value:
+            try:
+                test_cond=(eval(k,self._globals) or False)
+                if type(test_cond)==bool:
+                    ans+=[test_cond]
+                else:
+                    error=True
+                    print('Error in {}'.format(k))
+            except:
+                error=True
+                print('Error in {}'.format(k))
+        if error :
+            self._check=[]
+        else:
+            self._check=value
+        
+        # display condition list and states
+        self.cond_dict={}
+        self.check_panel.clear()
+        for i,cond in enumerate(self._check):
+            text_panel=pn.widgets.TextInput(name='Condition {}'.format(i+1), value=cond, disabled=True,width=550)
+            boolean_panel=pn.widgets.Switch(value=ans[i],disabled=True)
+            row_panel=pn.Row(text_panel,boolean_panel)
+            message=False
+            self.cond_dict[i]=[row_panel,text_panel,boolean_panel,message]
+            self.check_panel.append(pn.layout.Divider())
+            self.check_panel.append(row_panel)
+                   
+    def monitor_work(self):
+        """
+            Take a measurement, show it and wait 5s
+        """
+        while self._continue:
+            self.tabular.object=self.measure_function.take()
+            for i,cond in enumerate(self._check):
+                condition=(eval(cond,self._globals) or False)
+                self.cond_dict[i][2].value=condition
+                if condition:
+                    # No message send yet
+                    if not(self.cond_dict[i][3]):
+                        message='Warning: '+cond+' is now True'
+                        self.message_box(message)
+                        if len(self._warning)>0:
+                            for warning in self._warning:
+                                try:
+                                    warning(message)
+                                except:
+                                    pass
+                        # message is sent, so don't repeat
+                        self.cond_dict[i][3]=True
+                else:
+                    # No message send
+                    self.cond_dict[i][3]=False
+            time.sleep(5)
+    
+    def set_measure(self,measure):
+        # validate measure
+        try:
+            self._measure=self.format_measure(measure)
+        except:
+            self._measure={}
+        # Copy old Measurement object
+        try:
+            old_measure_function=self.measure_function
+        except:
+            pass
+        # Create one Measurement object
+        if self._measure=={}:
+            self.measure_function=Fake_Measurement()
+        else:
+            self.measure_function=Measurement(self._measure,format=self.format)
+        # Close previous Measurement object
+        try:
+            old_measure_function.close()
+        except:
+            pass    
+        
+    def check_and_return_device(self,device):
+        """
+            check the validity of a device and if not registered or locked
+            return the corresponding dictionnary
+            otherwise raise an exception
+        """
+        # self.update_instruments()
+        local_dict={}
+        if isinstance(device,Alias):
+            local_dict=device.dict
+        elif isinstance(device,list):
+            local_dict[device[1]]=device
+        elif isinstance(device,tuple):
+            local_dict[device[1]]=list(device)
+        elif isinstance(device,dict):
+            local_dict=device
+        else:
+            raise ExperimentError('Device is not recognized')
+        
+        message=''
+        valid=True
+        for key in local_dict.keys():
+            # Check if the device is valid
+            if not(hasattr(local_dict[key][0],local_dict[key][1])):
+                valid=False
+                message+='Device has no attribute '+str(local_dict[key][1])
+        
+        # if valid return device otherwise raise error
+        if valid==True:
+            return(local_dict)
+        else:
+            raise ExperimentError(message)
+    
+    def format_measure(self,meas):
+        new_measure={}
+        for key in meas.keys():
+            device_dict=self.check_and_return_device(meas[key])
+            for local_key in device_dict.keys():
+                new_measure[key]=device_dict[local_key]
+        return(new_measure)
+
+
+class Plotter_Button(object):
+    """
+        Class used to have a Panel button to launch the external plotter
+    """
+    def __init__(self):
+        pass
+        
+    def start(self):
+        plotter_button=pn.widgets.Button(name='Plotter', button_type='danger', width=100)
+        plotter_button.on_click(self.launch_plotter)
+        return(plotter_button)
+    
+    def launch_plotter(self,event):
+        folder=os.path.dirname(inspect.getfile(self.start))
+        process=Popen(['pythonw','{}\\utils\\plot_exec.pyw'.format(folder)])
+        
 class Panel_message(object):
     """
         Class used to generate a message with panel
@@ -42,14 +273,17 @@ class Panel_message(object):
     
     def __init__(self,description='Message',message=''):
         #display(pn.widgets.TextInput(name=description, placeholder='',value=message,disabled=True,width=500))
-        display(pn.pane.Markdown('**'+description+' : **'+message))
+        date_string=datetime.now().strftime("%d/%m/%Y at %H:%M:%S")
+        message_temp='**{}'.format(description)+date_string+':** <br>'
+        message_temp+=message
+        display(Markdown(message_temp))
         
 class Panel_Interface_Exp(object):
     """
         Class used to generate the interface of the experiment with Panel
     """
     
-    def __init__(self,batch=False,interface=None,PanelServer=None):
+    def __init__(self,batch=False,interface=None,panelserver=None,panelport=5009):
         # create the stepper dict
         self.step_dict={}
         # message to display by the interface
@@ -58,12 +292,15 @@ class Panel_Interface_Exp(object):
             # Event to handle the stop and pause function
             self.should_stop=Event()
             self.should_pause=Event()
-            # panel in the initial notebook
+            # Define type of display to use
+            self._panelserver=(panelserver!=None)
+            # Panel server
+            self.server=panelserver
+            self.panelport=panelport
+            # starting message 
             date_string=datetime.now().strftime("%d/%m/%Y at %H:%M:%S")
-            message='**Executing instruction started the '+date_string+' ...**'
-            self.notebook_panel=pn.Column(pn.pane.Markdown(message,width=590))
-            self._panelserver=(PanelServer!=None)
-            self.server=PanelServer
+            message='**Executing instruction started the '+date_string+' ...** <br>'
+            message+='Panel available at [http://localhost:{0}/process](http://localhost:{0}/process)'.format(self.panelport)
             # Panel elements that will be shown in the PanelServer 
             # batch panel
             self.batchpanel=pn.Column()
@@ -71,18 +308,18 @@ class Panel_Interface_Exp(object):
             self.mainpanel=pn.Column()
             # plot panel
             self.plotpanel=pn.Column()
+
             # display
-            title='### Intruction started the '+date_string
+            title='### Instruction started the '+date_string
             self.main=pn.Column(title,self.batchpanel,
                                 self.mainpanel,self.plotpanel,pn.layout.Divider())
-            self.PanelServer=PanelServer
             if self._panelserver:
-                display(self.notebook_panel)
-                time.sleep(0.2)
-                PanelServer.append(self.main)
+                self.notebook_panel=display(Markdown(message),display_id=True)
+                panelserver.append(self.main)
             else:
-                display(self.main)
-                time.sleep(0.2)
+                self.notebook_panel=display(self.main,display_id=True)
+            self.notebook_plot=display(display_id=True)
+            time.sleep(0.2)
                 
             # logger
             self.logger=logging.getLogger(__name__)
@@ -182,7 +419,7 @@ class Panel_Interface_Exp(object):
         self._message=text
         self.text.value=text
            
-    def create_stepper(self,name,instru,device):
+    def create_stepper(self,name,instru,device,start,end):
         """
             Method for creating the progress and value widget 
             in an already existing interface
@@ -194,14 +431,11 @@ class Panel_Interface_Exp(object):
         self.step_dict[name]['device']=device        
         
         # create widgets for this stepper
-        key='Stepper'
-        start=0
-        end=1
         start_value = pn.widgets.TextInput(name='Start', value=str(start),width=100,disabled=True)
         end_value = pn.widgets.TextInput(name='End', value=str(end),width=100,disabled=True)
-        float_slider = pn.widgets.FloatSlider(name=key, start=start, end=end, 
+        float_slider = pn.widgets.FloatSlider(name=name, start=start, end=end, 
                                       step=abs((end-start)/100.0), value=start, 
-                                      disabled=True,format=PrintfTickFormatter(format='%.3f'),
+                                      disabled=True,format=PrintfTickFormatter(format='%.4f'),
                                       width=350)
         stepper_row=pn.Row(start_value,float_slider,end_value)
         self.mainpanel.append(stepper_row)
@@ -240,6 +474,19 @@ class Panel_Interface_Exp(object):
         #self.step_dict[name]['slider'].value=value        
         self.step_dict[name]['slider'].disabled=True
             
+    def set_stepper_status(self,name,status,mode):
+        if status == 'initialized':
+            self.step_dict[name]['slider'].name='{}: initializing to '.format(name)
+        elif status == 'back':
+            self.step_dict[name]['slider'].name='{}: moving back to starting point: '.format(name)
+        else:
+            if mode == 'updn':
+                self.step_dict[name]['slider'].name='{}: updn: '.format(name)
+            elif mode == 'serpentine':
+                self.step_dict[name]['slider'].name='{}: {}: '.format(name,status)
+            else:
+                self.step_dict[name]['slider'].name=name
+    
     def set_stepper_value(self,name,value):
         self.step_dict[name]['slider'].value=value
                  
@@ -405,10 +652,10 @@ class Panel_Interface_Exp(object):
                     pass
         return(plot_range)
     
-    def plot_data(self,*args):
+    def plot_fig(self,*args):
         data=pd.read_csv(self._file,comment='#',header=0)
         data.insert(0,'Index',list(range(len(data))))
-        fig = Figure(dpi=150)
+        fig = Figure(dpi=100)
         if self.zdata.value[0] == "None": # case of regular figure
             if self.plot_multi.value:
                 ax=fig.subplots(len(self.ydata.value),1)
@@ -478,8 +725,11 @@ class Panel_Interface_Exp(object):
                         title=self.zdata.value[0])
                 ax.grid()
         fig.tight_layout()
+        return fig
+        
+    def plot_data(self,*args):
         self.plt_panel.clear()
-        self.plt_panel.append(pn.pane.Matplotlib(fig))  
+        self.plt_panel.append(pn.pane.Matplotlib(self.plot_fig()))
     
     def clear_for_batch(self):
         """
@@ -510,25 +760,16 @@ class Panel_Interface_Exp(object):
         
         # clear interface
         self.main.clear()
-        self.notebook_panel.clear()
-        time.sleep(0.2)
         # write last message
         message='**Task done the '+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+' :** <br>'+value_string
-        if self._panelserver:
-            self.notebook_panel.append(pn.pane.Markdown(message,width=590))
-            time.sleep(0.2)
-        else: 
-            self.main.append(pn.pane.Markdown(message,width=590))
-            time.sleep(0.2)
+        self.notebook_panel.update(Markdown(message))
         # if plotting asked, do the plot
         try:
             if self.plot_option.value:
-                self.plt_panel.clear()
-                if self._panelserver:
-                    self.notebook_panel.append(self.plt_panel)
-                else:
-                    self.main.append(self.plt_panel)
-                self.plot_data()
+                output = io.BytesIO()
+                self.plot_fig().savefig(output,dpi=150)
+                self.notebook_plot.update(Image(output.getvalue(),width=500))
+                # self.notebook_plot.update(pn.pane.Matplotlib(self.plot_fig()))
         except:
             pass
         # remove main panel from the panel server
@@ -542,6 +783,133 @@ class Panel_Interface_Exp(object):
             Method for closing the interface
         """
         self.main.clear()
-
+        
+class Spy_Interface(object):
+    """
+        Class used to have a Spy interface 
+    """
+    def __init__(self,measure={},format='line',panelserver=None,Notebook_display=None):
+        # Notebook cell to update when spy is closed
+        self._notebook_display=Notebook_display
+        # Panel server
+        self.server=panelserver
+        # Create interface
+        # close button
+        self.stop = pn.widgets.Toggle(name='Stop', button_type='danger', width=100)  
+        self.stop.param.watch(self.close, ['value'])
+        # show Dataframe for measurement
+        self.tabular=pn.pane.DataFrame(pd.DataFrame({}),sizing_mode="stretch_both", max_height=300,max_width=600)
+        # global layout
+        self.spy_panel=pn.Column(self.stop,self.tabular)
+        #,pn.layout.Divider)
+        self.server.append(self.spy_panel)
+        # display(self.monitor_panel)
+        self._format='line'
+        self.set_measure(measure)
+        self.format=format
+        self._continue=True
+        args=()
+        monitor_thread=Thread(name='Spy Thread',target=self.monitor_work,args=args)
+        monitor_thread.start()
+    
+    @property
+    def format(self):
+        return self._format
+    
+    @format.setter
+    def format(self,value):
+        if value in ('line','line_multi','col','col_multi'):
+            self._format=value
+        else:
+            self._format='line'
+        self.set_measure(self.measure)
+    
+    @property
+    def measure(self):
+        return self._measure
+    
+    @measure.setter
+    def measure(self,value):
+        self.set_measure(value)
+                           
+    def monitor_work(self):
+        """
+            Take a measurement, show it and wait 5s
+        """
+        while self._continue:
+            self.tabular.object=self.measure_function.take()
+            time.sleep(5)
+    
+    def set_measure(self,measure):
+        # validate measure
+        try:
+            self._measure=self.format_measure(measure)
+        except:
+            self._measure={}
+        # Copy old Measurement object
+        try:
+            old_measure_function=self.measure_function
+        except:
+            pass
+        # Create one Measurement object
+        if self._measure=={}:
+            self.measure_function=Fake_Measurement()
+        else:
+            self.measure_function=Measurement(self._measure,format=self.format)
+        # Close previous Measurement object
+        try:
+            old_measure_function.close()
+        except:
+            pass    
+        
+    def check_and_return_device(self,device):
+        """
+            check the validity of a device and if not registered or locked
+            return the corresponding dictionnary
+            otherwise raise an exception
+        """
+        # self.update_instruments()
+        local_dict={}
+        if isinstance(device,Alias):
+            local_dict=device.dict
+        elif isinstance(device,list):
+            local_dict[device[1]]=device
+        elif isinstance(device,tuple):
+            local_dict[device[1]]=list(device)
+        elif isinstance(device,dict):
+            local_dict=device
+        else:
+            raise ExperimentError('Device is not recognized')
+        
+        message=''
+        valid=True
+        for key in local_dict.keys():
+            # Check if the device is valid
+            if not(hasattr(local_dict[key][0],local_dict[key][1])):
+                valid=False
+                message+='Device has no attribute '+str(local_dict[key][1])
+        
+        # if valid return device otherwise raise error
+        if valid==True:
+            return(local_dict)
+        else:
+            raise ExperimentError(message)
+    
+    def format_measure(self,meas):
+        new_measure={}
+        for key in meas.keys():
+            device_dict=self.check_and_return_device(meas[key])
+            for local_key in device_dict.keys():
+                new_measure[key]=device_dict[local_key]
+        return(new_measure)
+        
+    def close(self,*event):
+        self._continue=False
+        self.server.remove(self.spy_panel)
+        if self._notebook_display != None:
+            # write last message
+            message='**Task done the '+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+' :** <br>'+'Spy'
+            self._notebook_display.update(Markdown(message))
+            
 if __name__ == "__main__":
     print('This is the Notebook Interface class')
