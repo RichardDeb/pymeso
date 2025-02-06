@@ -27,6 +27,7 @@
 from pymeso.instruments import Instrument
 import socket
 import time
+from threading import Thread
 from pymeso.instruments.utils import Device_gui
 
 class MGC3(Instrument):
@@ -50,13 +51,7 @@ class MGC3(Instrument):
             self.name=ip_string
         else:
             self.name=name
-        
-        # Create a UDP socket for getting data from MGC3 module
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        UDP_IP = ""
-        UDP_PORT = 12000
-        self.sock.bind((UDP_IP, UDP_PORT))
-        
+            
         # Define MGC3 module  
         self.mgc3 = [{'ip':self.ip,
              'port':12039,
@@ -68,160 +63,68 @@ class MGC3(Instrument):
              'T':(2,14,26),
              'on':(1,13,25)
              }]
-
-    def send_MGC3_get(self,module,prop,index):
+             
+    def recv_last(self):
         """
-            Internal function : send a message to the MGC3 module
+            Internal function used to read the last data sent by the module 
         """
-        message=('MGC3GET '+str(self.mgc3[module][prop][index])).encode('utf-8')
-        self.sock.sendto(message,(self.mgc3[module]['ip'],self.mgc3[module]['port']))
-        data, server = self.sock.recvfrom(4096)
-        return(float(data.decode()))
+        data = b''
+        while True:
+            t0=time.time()
+            data_chunk = self.client.recv(1024)
+            t1=time.time()
+            if data_chunk:
+                data=data_chunk
+            else:
+                break
+            if (t1-t0) > 0.1:
+                break
+        return data
         
-    def send_MGC3_set(self,value,module,prop,index):
-        """
-            Internal function : send a message to the MMR3 modules
-        """
-        message='MGC3SET '+str(self.mgc3[module][prop][index])+' '+str(value)
-        self.sock.sendto(message.encode('utf-8'),(self.mgc3[module]['ip'],self.mgc3[module]['port']))
-               
-    def set_PID_MC(self,P=None,I=None,D=None,Pmax=None):
-        """ Set the PID function for the mixing chamber """
-        module=0
-        index=0
-        if P!=None:
-            self.send_MGC3_set(float(P),module,'P',index)
-        if I!=None:
-            self.send_MGC3_set(float(I),module,'I',index)
-        if D!=None:
-            self.send_MGC3_set(float(D),module,'D',index)
-        if Pmax!=None:
-            self.send_MGC3_set(float(Pmax),module,'Pmax',index)
-            
-    @property
-    def PID_MC(self):
-        """ 
-            List of the values for the PID of the mixing chamber with :
-                - P in W/K
-                - I in S-1
-                - D in S
-                - Pmax in W 
-        """
-        module=0
-        index=0
-        prop=['P','I','D','Pmax']
-        pid_table=[]
-        for i in range(4):
-            pid_table.append(self.send_MGC3_get(module,prop[i],index))
-        return(pid_table)
-        
-    def set_T_MC(self,value):
-        """
-            Set the target temperature of the MGC3 module for the mixing chamber
-        """
-        module=0
-        index=0
-        self.send_MGC3_set(float(value),module,'T',index)
-        
+    def connect(self):
+        # Create TCP socket for listening to the MGC3 module
+        self.client=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((self.ip,11000+int(self.ip.split('.')[-1])))
+    
     @property
     def T_MC(self):
         """
             Get the target temperature of the MGC3 module for the mixing chamber
         """
-        module=0
-        index=0
-        return float(self.send_MGC3_get(module,'T',index))
+        self.connect()
+        data=self.recv_last()
+        temp=float(data.decode().split('\n')[3].split(';')[-1])
+        self.client.close()
+        return temp
         
     @T_MC.setter
     def T_MC(self,value):
         """
             Set the target temperature of the MGC3 module for the mixing chamber
         """
-        self.set_T_MC(value)
-        
-    def start_PID_MC(self):
-        """
-            Start the PID for the mixing chamber
-        """
-        module=0
-        index=0
-        self.send_MGC3_set(1,module,'on',index)
-        
-    def stop_PID_MC(self):
-        """
-            stop the PID for the mixing chamber
-        """
-        module=0
-        index=0
-        self.send_MGC3_set(0,module,'on',index)
-    
-    def set_PID_still(self,P=None,I=None,D=None,Pmax=None):
-        """ Set the PID function for the still """
-        module=0
-        index=1
-        if P!=None:
-            self.send_MGC3_set(float(P),module,'P',index)
-        if I!=None:
-            self.send_MGC3_set(float(I),module,'I',index)
-        if D!=None:
-            self.send_MGC3_set(float(D),module,'D',index)
-        if Pmax!=None:
-            self.send_MGC3_set(float(Pmax),module,'Pmax',index)
-            
-    @property
-    def PID_still(self):
-        """ 
-            List of the values for the PID of the mixing chamber with :
-                - P in W/K
-                - I in S-1
-                - D in S
-                - Pmax in W 
-        """
-        module=0
-        index=1
-        prop=['P','I','D','Pmax']
-        pid_table=[]
-        for i in range(4):
-            pid_table.append(self.send_MGC3_get(module,prop[i],index))
-        return(pid_table)
+        self.connect()
+        message=('1;2;{}\n'.format(float(value))).encode()
+        self.client.send(message)
+        self.client.close()
            
-    def set_T_still(self,value):
-        """
-            Set the target temperature of the MGC3 module for the still
-        """
-        module=0
-        index=1
-        self.send_MGC3_set(float(value),module,'T',index)
-        
     @property
     def T_still(self):
         """
             Get the target temperature of the MGC3 module for the still
         """
-        module=0
-        index=1
-        return float(self.send_MGC3_get(module,'T',index))
+        self.connect()
+        data=self.recv_last()
+        temp=float(data.decode().split('\n')[15].split(';')[-1])
+        self.client.close()
+        return temp
         
     @T_still.setter
     def T_still(self,value):
         """
             Set the target temperature of the MGC3 module for the still
         """
-        self.set_T_still(value)
-    
-    def start_PID_still(self):
-        """
-            Start the PID for the still
-        """
-        module=0
-        index=1
-        self.send_MGC3_set(1,module,'on',index)
-        
-    def stop_PID_still(self):
-        """
-            stop the PID for the still
-        """
-        module=0
-        index=1
-        self.send_MGC3_set(0,module,'on',index)
+        self.connect()
+        message=('1;14;{}\n'.format(float(value))).encode()
+        self.client.send(message)
+        self.client.close()
      
