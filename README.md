@@ -26,3 +26,4 @@ This panel has three apps :
 from pymeso import Experiment
 exp = Experiment(panel_port=5011)
 ```
+Pymeso panel at [http://localhost:5011](http://localhost:5011/) <br> Logfile is experiment_logfile.log
