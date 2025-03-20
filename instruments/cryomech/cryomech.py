@@ -49,14 +49,14 @@ class PTC(Instrument):
         cryo.get_data()                        # return data from the Cryomech compressor 
     """
     
-    def __init__(self, ip_address, port=502, timeout=10, warning=None):
+    def __init__(self, ip_address, port=502, timeout=10):
         self.ip_address = ip_address
         self.port = port
-        self._no_warning=True
+        # self._no_warning=True
         self._continue=True
-        self.safety=True
-        # function used to send a warning message
-        self.warning=warning
+        # self.safety=True
+        # # function used to send a warning message
+        # self.warning=warning
         
         # Connect to the compressor
         self.comm = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -64,8 +64,8 @@ class PTC(Instrument):
         self.comm.settimeout(timeout)
         
         # Launch safety thread
-        self.safety_thread=Thread(target=self.work_check_safety,name='PT compressor safety thread')
-        self.safety_thread.start()
+        # self.safety_thread=Thread(target=self.work_check_safety,name='PT compressor safety thread')
+        # self.safety_thread.start()
 
     def get_data(self):
         """
@@ -76,6 +76,24 @@ class PTC(Instrument):
         data_flag, brd = self.breakdownReplyData(data)
 
         return data_flag, brd
+        
+    @property
+    def state(self):
+        """
+            Get the state of the compressor
+        """
+        return self.get_data()[1]['Compressor State']
+        
+    @property
+    def warning_state(self):
+        """
+            Get the state of the compressor
+        """
+        return self.get_data()[1]['Warning State']
+        
+    @property
+    def warning(self):
+        return self.warning_state!='No warnings'
 
     def buildRegistersQuery(self):
         # ModBusTCP query code
@@ -280,39 +298,39 @@ class PTC(Instrument):
         """
         self.comm.close()
         
-    # Functions used to generate a GUI
-    def get_data_dict(self):
-        """ Get some data and generate a dict"""
-        data_dict={}
-        data_dict['PT Compressor']=self.get_data()[1]
-        return(data_dict)
+    # # Functions used to generate a GUI
+    # def get_data_dict(self):
+        # """ Get some data and generate a dict"""
+        # data_dict={}
+        # data_dict['PT Compressor']=self.get_data()[1]
+        # return(data_dict)
         
-    def gui(self,name=None):
-        """Create a GUI based on get_data_dict() """
-        if name==None:
-            name='Parameters'
-        local_gui=Device_gui(name)
-        local_gui.start(self.get_data_dict,wait=5.0)
+    # def gui(self,name=None):
+        # """Create a GUI based on get_data_dict() """
+        # if name==None:
+            # name='Parameters'
+        # local_gui=Device_gui(name)
+        # local_gui.start(self.get_data_dict,wait=5.0)
 
-    # Function used for safety
-    def work_check_safety(self):
-        """Internal function to detect an anomaly on the compressor."""
-        previous_message="No warnings"
-        while self._continue:
-            data=self.get_data()[1]
-            warning_message=data["Warning State"]
-            if warning_message!=previous_message:
-                message='WARNING from PT compressor\n'+datetime.now().strftime("%d/%m/%Y, %H:%M:%S: ")+warning_message
-                message_box(message)
-                # use warning procedure (ex : mail_sender) to send a message
-                try:
-                    self.warning(message)
-                except:
-                    pass
-                #print(data["Warning State"])
-                previous_message=warning_message
-                self.safety=(warning_message=="No warnings")
-            time.sleep(5.0)  
+    # # Function used for safety
+    # def work_check_safety(self):
+        # """Internal function to detect an anomaly on the compressor."""
+        # previous_message="No warnings"
+        # while self._continue:
+            # data=self.get_data()[1]
+            # warning_message=data["Warning State"]
+            # if warning_message!=previous_message:
+                # message='WARNING from PT compressor\n'+datetime.now().strftime("%d/%m/%Y, %H:%M:%S: ")+warning_message
+                # message_box(message)
+                # # use warning procedure (ex : mail_sender) to send a message
+                # try:
+                    # self.warning(message)
+                # except:
+                    # pass
+                # #print(data["Warning State"])
+                # previous_message=warning_message
+                # self.safety=(warning_message=="No warnings")
+            # time.sleep(5.0)  
             
 def main():
     print('This is the PTC driver')
