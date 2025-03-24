@@ -106,6 +106,22 @@ class QDInstrument:
         except:
             return 0, -1
         return err, arg0.value
+        
+    def set_position(self,position,mode,rate):
+        """Sets position and returns MultiVu error code"""
+        err = self._mvu.SetPosition(position,mode,rate)
+        return err
+
+    def get_position(self):
+        """Gets and returns position info as (MultiVu error, position, status)"""
+        arg0 = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_R8, 0.0)
+        arg1 = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+        try:
+            err = self._mvu.GetPosition(arg0, arg1)
+        except:
+            return 0, -1, 0
+        # win32com reverses the arguments, so:
+        return err, arg1.value, arg0.value
 
 class PPMS(Instrument):
     """ 
@@ -170,6 +186,8 @@ class PPMS(Instrument):
         # dictionnary used for value checking
         self.checking={}
     
+    
+    ##### Temperature control
     @property
     def temp(self):
         """
@@ -226,6 +244,7 @@ class PPMS(Instrument):
         """
         return self.TempStates[str(self._ppms.get_temperature()[1])]
 
+    ##### Field control
     @property
     def field(self):
         """
@@ -279,10 +298,65 @@ class PPMS(Instrument):
     def field_status(self):
         return self.MagStates[str(self._ppms.get_field()[1])]
         
+    ##### Chamber state
     @property
     def chamber(self):
         return self.ChamberStates[str(self._ppms.get_chamber()[1])]    
         
+    ##### Position control
+    @property
+    def position(self):
+        """
+            Get position = angle (in degree) of the PPMS
+        """
+        return float(self._ppms.get_position()[2])
+        
+    def position_sweep(self,start,end,rate):
+        """ ramps the position with set ramp rate. """
+        self._position_rate = rate
+        self._position_start= start
+        self._position_stop= end
+        self._ppms.set_position(end,rate,0,0)
+             
+    def position_pause(self,value):
+        """
+            pause the sweep
+        """
+        pass
+            
+    def position_stop(self):
+        """
+            stop the sweep
+        """
+        pass
+        
+    @property
+    def position_value(self):
+        """
+            value of the field
+        """
+        value=self.position
+        try:
+            self._progress=(value-self._position_start)/(self._position_stop-self._position_start)
+        except:
+            self._progress=0.5
+        return(value)
+    
+    @property
+    def position_progress(self):
+        """ indicate the progress of the sweep. Updated by calling first field_value
+        """
+        if float(self._ppms.get_position()[1])==1.0:
+            self._progress=1.0
+        return(self._progress)
+        
+    def position_sweepable(self):
+        return(True)
+    
+    @property
+    def position_status(self):
+        return str(self._ppms.get_position()[1])
+    
     # return configuration
     def read_config(self):
         """ return a configuration dict for the SRS830"""
