@@ -28,22 +28,33 @@ import pandas as pd
 import time
 import panel as pn
 from datetime import datetime
-import os
+import os,io
 import gzip,bz2,lzma
 from matplotlib.figure import Figure
 from pymeso.utils import ExperimentError
-
+from IPython.display import display,Markdown,Image
         
 class Plotter_in_Notebook(object):
     """
         Class used to plot the data from a given file 
     """
     
-    def __init__(self,file):
+    def __init__(self,file,plotpanel=None,panelport=5009):
+        # create panel server
+        if plotpanel==None:
+            self.plotpanel=pn.Column('# PYMESO PLOTTER')
+            self.bokehserver=pn.serve(self.plotpanel,threaded=True,title="Pymeso Plotter")
+            self.close_bokehserver=True
+        else:
+            self.plotpanel=plotpanel
+            self.close_bokehserver=False
+        message='**Plotter for file {}** <br>'.format(file)
+        message+='available at [http://localhost:{0}/plotter](http://localhost:{0}/plotter)'.format(panelport)
+        self.display_plot=display(Markdown(message),display_id=True)
+        
         # plot panel
-        self.plotpanel=pn.Column()
-        display(self.plotpanel)
-        time.sleep(0.2)
+        # self.plotpanel=pn.Column()
+        # self.display_plot.update(self.plotpanel)
         self.create_plotter_interface(file)
 
     def create_plotter_interface(self,file):
@@ -71,7 +82,8 @@ class Plotter_in_Notebook(object):
         self.plot_button = pn.widgets.Button(name='Plot and close', button_type='danger',align='end', width=100)
         self.plot_button.on_click(self.plot_and_close)
         # insert in plot panel
-        self.plotpanel.append(pn.Row(file,self.plot_now,self.plot_button))
+        self.layout0=pn.Row(file,self.plot_now,self.plot_button)
+        self.plotpanel.append(self.layout0)
             
         ### to plot at the end of the sweep
         self.xdata = pn.widgets.Select(name='X:', value=columns_list[1], options=columns_list,width=200)
@@ -79,9 +91,9 @@ class Plotter_in_Notebook(object):
         self.zdata = pn.widgets.MultiSelect(name='Z:', value=["None"], options=['None']+columns_list,width=200)
         self.plot_multi=pn.widgets.Checkbox(name='multiple plots',width=200)
         self.plt_panel=pn.Column()
-        layout=pn.Column(pn.Row(pn.Column(self.plot_multi,self.xdata),self.ydata,self.zdata),self.plt_panel)
+        self.layout=pn.Column(pn.Row(pn.Column(self.plot_multi,self.xdata),self.ydata,self.zdata),self.plt_panel)
         # insert in plot panel
-        self.plotpanel.append(layout)
+        self.plotpanel.append(self.layout)
         time.sleep(0.2)
            
     def header_count(self):
@@ -148,7 +160,7 @@ class Plotter_in_Notebook(object):
                     pass
         return(plot_range)
     
-    def plot_data(self,*args):
+    def plot_fig(self):
         data=pd.read_csv(self._file,comment='#',header=0)
         data.insert(0,'Index',list(range(len(data))))
         fig = Figure(dpi=150)
@@ -221,14 +233,29 @@ class Plotter_in_Notebook(object):
                         title=self.zdata.value[0])
                 ax.grid()
         fig.tight_layout()
+        return fig
+        
+    def plot_data(self,*args):
         self.plt_panel.clear()
-        self.plt_panel.append(pn.pane.Matplotlib(fig))  
+        self.plt_panel.append(pn.pane.Matplotlib(self.plot_fig()))
     
     def plot_and_close(self,*args):
-        self.plotpanel.clear()
-        self.plt_panel.clear()
-        self.plotpanel.append(self.plt_panel)
-        self.plot_data()
-
+        # self.plt_panel.clear()
+        # return self.plot_fig()
+        # self.display_id.update(Markdown('Finnish'))
+        # self.display_id.update(pn.pane.Matplotlib(self.plot_fig(),dpi=100))
+        # panel_fig=pn.pane.Matplotlib(self.plot_fig())
+        self.plotpanel.remove(self.layout0)
+        self.plotpanel.remove(self.layout)
+        # time.sleep(0.2)
+        # self.plotpanel.append(panel_fig)
+        # time.sleep(0.2)
+        # self.display_plot.update(Markdown(self.message))
+        output = io.BytesIO()
+        self.plot_fig().savefig(output,dpi=150)
+        self.display_plot.update(Image(output.getvalue(),width=500))
+        if self.close_bokehserver:
+            self.bokehserver.stop()
+  
 if __name__ == "__main__":
     print('This is the Notebook Interface class')

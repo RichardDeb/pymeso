@@ -257,7 +257,9 @@ class Data_Saver(object):
         Create queues and thread to save data in a file.
         The options format determines the file format : csv or hdf (format='hdf').
     """
-    def __init__(self,file,file_format='csv'):
+    def __init__(self,file,file_format='csv',append=False):
+        # Should append in existing file
+        self.append=append
         # File where to save the data
         self.file=file
         # Instantiate the queue q used for the multithreading
@@ -273,8 +275,11 @@ class Data_Saver(object):
             Write the header if it is the first save
             If 'stop' is received then stop
         """
-        first_save=True
-        Ndata=0
+        if self.append:
+            first_save=False
+        else:
+            first_save=True
+        # Ndata=0
         while True:
             df=q.get()
             q.task_done()
@@ -1012,4 +1017,295 @@ def convert_to_np_array(input):
     '''
     treat=re.findall(r'([+-]?\d+(?:\.\d+)?(?:[eE][+-]\d+)?)', input)
     return(np.array(list(map(float,treat))))
+    
+class FlySweep(object):
+    """
+        SYNTAX : FlySweep(device,start,stop,rate,N)
+        
+        Sweep the device defined in device from start to end at a given rate. It is designed to try to measure N points on the fly. 
+        If a name is provided it will be used as a label, otherwise the name of the device is used.
+        The values of the sweep are checked to be compatible with the device.
+        This sweep can be used with the Experiment function multisweep.
+        
+        The device can be indicated in different forms :
+            - device, if device belongs to the class Alias.
+            - [instru,'attribute'] to move instru.attribute.
+            - (instru,'attribute') to move instru.attribute.
+            
+        OPTIONS :
+            - extra_rate : rate used outside the main loop. If None then set to rate. Default : None
+            - back : If True, return to the start value when finished. Default : False.
+            - mode : define the mode of the sweep. Default : None
+                * None : standard sweep
+                * serpentine : alternate forward and backwards for successive stepper
+                * updn : do a forward and then a backward sweep
+            - init_wait : value of the time waited at the beginning of the sweep, if None set to self.init_wait. Default : None
+            
+        EXAMPLES :
+            sweep0=FlySweep([test,'dac'],0,1,0.1,11,name='Vbias(mV)',extra_rate=0.2,mode='updn') 
+            sweep1=FlySweep(Vbias,0,1,0.1,11,extra_rate=0.2,back=True)  #if Vbias is defined as an Alias
+    """
+    
+    def __init__(self,device,start,stop,rate,N,name=None,init_wait=0,back=False,extra_rate=None,mode=None,**kwargs):
+        self.type='FlySweep'
+        if name==None:
+            try:
+                self.name=device.name
+            except:
+                self.name=device[1]
+        else:
+            self.name=name
+        if isinstance(device,Alias):
+            self.device=[device.instru,device.param]
+        else:
+            self.device=device
+        self.dict={self.name:self.device}
+        # create Sweep and validate device
+        try:
+            self.local_sweep=Sweep(self.name,self.device[0],self.device[1])
+            self.current_value=self.get_value()
+        except:
+            raise ExperimentError('Device not correct.') 
+        self.start=start
+        self.end=stop
+        self.N=N
+        self.rate=rate
+        self.time_to_wait=abs(self.end-self.start)/((N-1)*self.rate)
+        self.time_of_sweep=abs(self.end-self.start)/(self.rate)
+        self.kwargs=kwargs
+        self.busy=False
+        self.finished=False
+        self.init_wait=init_wait
+        self.back=back
+        self.forward=True
+        if extra_rate==None:
+            self.extra_rate=rate
+        else:
+            self.extra_rate=extra_rate
+        self.mode=mode
+        # define the Event used for pause and stop
+        self.should_stop=self.local_sweep.should_stop
+        self.should_pause=self.local_sweep.should_pause
+        # define pause and stop function
+        self.stop=self.local_sweep.stop
+        self.pause=self.local_sweep.pause
+        # check the value of the sweep
+        self.sweep_values,self.index_values=self.generate_values()
+        if not(self.checking_values()):
+            raise(ExperimentError('Sweep values out of range'))
+        # define the values used for the interface
+        self.interface_start=self.start
+        self.interface_end=self.end
+        # status
+        self.status='initialized'
+        
+    def set_value(self,value):
+        """"
+            Set the device to the value value
+        """
+        setattr(self.device[0],self.device[1],value)
+        
+    def get_value(self):
+        """"
+            Return the current value by reading the instrument
+        """
+        return(self.local_sweep.get_value())
+    
+    @property 
+    def value(self):
+        return(self.get_value())
+        
+    @property
+    def interface_value(self):
+        return(self.get_value())
+        
+    def wait_function(self,wait):
+        """
+            function used for waiting while checking pause and stop
+        """
+        t0=time.time()
+        while (time.time()-t0) < wait:
+            if self.should_stop.is_set():
+                break
+            else: 
+                time.sleep(0.01)
+        while self.should_pause.is_set():
+            if self.should_stop.is_set():
+                break
+            else: 
+                time.sleep(0.01)
+                
+    def wait_end_sweep(self,local_sweep_thread):
+        """
+            function used for waiting the end of the sweep while checking stop
+        """
+        while local_sweep_thread.is_alive():
+            if self.should_stop.is_set():
+                break
+            else: 
+                time.sleep(0.01)
+    
+    def generate_values(self,update_forward=True):    
+        if self.mode==None:
+            list_values=np.linspace(self.start,self.end,2)
+        elif self.mode=='updn':
+            list_values=np.array([self.start,self.end,self.start])
+        elif self.mode=='serpentine':
+            if self.forward:
+                list_values=np.linspace(self.start,self.end,2)
+            else:
+                list_values=np.linspace(self.end,self.start,2)
+        else:
+            pass
+        return((list_values,list_values))
+        
+    def initialize(self):
+        self.sweep_values,self.index_values=self.generate_values()
+        self.Nvalues=len(self.sweep_values)-1
+        self.current_value=self.value
+        self.current_index=self.current_value
+        self.index=-1
+        self.progress=-1
+        self.finished=False
+        self.should_stop.clear()
+        self.pause(False)
+        self.status='initialized'
+            
+    def checking_values(self):
+        """
+            Function used for checking the values of the sweep.
+            Used the checking dict of the device.
+        """
+        try:
+            valid=np.all(self.device[0].checking[self.device[1]](self.sweep_values))
+        except:
+            valid=True
+        return(valid)
+                
+    def work_set_initial_value(self):
+        """"
+            Set the current value of the instrument
+        """
+        self.busy=True
+        self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
+        self.current_value=self.sweep_values[0]
+        self.current_index=self.index_values[0]
+        self.index=0
+        self.progress=0
+        self.sweep_pass=0
+        self.finished=False
+        self.wait_function(self.init_wait)
+        self.busy=False   
+    
+    def set_initial_value(self):
+        """"
+            Set the current value using another thread
+        """
+        thread_work_set_initial_value = Thread(name='Initial_Value_setter_thread',target=self.work_set_initial_value)     
+        thread_work_set_initial_value.start()
+
+    def work_handle_sweep(self):
+        """"
+            Start the sweep and wait time between measurement 
+        """
+        self.busy=True
+        if self.index==0:
+            # start the global sweep
+            self.local_sweep_thread=self.local_sweep.sweep(self.sweep_values[0],self.sweep_values[1],self.rate)
+            self.index=1
+            # wait the time before taking a measurement
+            self.wait_function(self.time_to_wait)
+        else :
+            # wait the time before taking a measurement
+            self.wait_function(self.time_to_wait)
+        self.current_value=self.value
+        self.current_index=self.current_value
+        self.progress=(self.current_value-self.start)/(self.end-self.start)
+        if not(self.local_sweep_thread.is_alive()):
+            if self.mode=='updn' and self.sweep_pass==0:
+                self.local_sweep_thread=self.local_sweep.sweep(self.sweep_values[1],self.sweep_values[2],self.rate)
+                self.sweep_pass=1
+            else:
+                self.finished=True
+        self.busy=False
+    
+    def handle_sweep(self):
+        """"
+            Set the current value using another thread
+        """
+        thread_work_handle_sweep = Thread(name='Handle_sweep_thread',target=self.work_handle_sweep,args=())    
+        thread_work_handle_sweep.start()
+        
+    def work_set_back_value(self):
+        """"
+            Set the value of the instrument to the initial value (if back option is True)
+        """
+        self.busy=True
+        self.finished=True
+        self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
+        self.busy=False   
+    
+    def set_back_value(self):
+        """"
+            Set the current value to the initial if back option is True using another thread
+        """
+        thread_work_set_back_value = Thread(name='Back_Value_setter_thread',target=self.work_set_back_value)     
+        thread_work_set_back_value.start()
+    
+    def initial_step(self):
+        """
+            Move to the initial step of the sweep. The index of the sweep is set at 0, finished to False and progress to 0.
+            Update also the infos that can be sent to the interface.
+        """
+        self.set_initial_value()
+        if self.forward:
+            self.status='forward'
+        else:
+            self.status='backward'
+        
+    def next_step(self):
+        """
+            Launch the sweep on the fly or wait to take a point
+        """
+        # one step of the sweep
+        self.handle_sweep()
+        
+    def finalize(self):
+        """
+            Procedure to finalize the sweep
+        """
+        if self.back:
+            self.current_value=self.value
+            self.status='back'
+            if self.sweep_values[0]!=self.current_value:
+                self.set_back_value()
+        if self.mode=='serpentine':
+            self.forward=not(self.forward)
+                
+    def full_sweep(self):
+        """
+            Execute the sweep completely in a thread and execute the action in another thread whis a trigger.
+            This is used for on the fly sweeps. Update the index, progress and finished attribute accordingly
+        """
+        pass
+        
+    def generate_info(self):
+        kwargs_string='init_wait={},back={},mode={},extra_rate={}'.format(
+            self.init_wait,self.back,self.mode,self.extra_rate)
+        return('{} {} {} {} {} {} {}'.format(self.type,self.name,
+            self.start,self.end,self.rate,self.N,kwargs_string))
+            
+    def show(self):
+        """
+            Plot the sweep values
+        """
+        N=len(self.sweep_values)
+        fig, ax = plt.subplots()
+        ax.plot(np.linspace(0,N-1,N),self.sweep_values,linewidth=2.0)
+        ax.set_xlabel('index')
+        ax.set_ylabel(self.name);
+        ax.set_title('{}: {} to {}'.format(self.type,self.start,self.end))
+        ax.grid(True)
+        plt.show()
+ 
     

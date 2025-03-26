@@ -28,6 +28,6 @@ from .plotter_forQTinterface import Plotter
 from .logger import set_logger
 from .spy import Spy
 from .utility import myTimer,Sweep,Data_Saver,ExperimentError,Alias
-from .utility import LinSteps,LogSteps,ArraySteps,LinSweep
+from .utility import LinSteps,LogSteps,ArraySteps,LinSweep,FlySweep
 from .utility import message_box
 from .plotter_in_notebook import Plotter_in_Notebook
