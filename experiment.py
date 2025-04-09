@@ -100,6 +100,7 @@ class Experiment(object):
             self.panel_monitor=pn.Column('# PYMESO MONITOR')
             self.panel_plotter=pn.Column('# PYMESO PLOTTER')
             self.panel_plotter.append(Plotter_Button().start())
+            self.panel_server.append(Plotter_Button().start())
             self._monitor=Monitor_Interface()
             self.panel_monitor.append(self._monitor.monitor_panel)
             pn.serve({
