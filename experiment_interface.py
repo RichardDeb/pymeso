@@ -300,7 +300,7 @@ class Panel_Interface_Exp(object):
             # starting message 
             date_string=datetime.now().strftime("%d/%m/%Y at %H:%M:%S")
             message='**Executing instruction started the '+date_string+' ...** <br>'
-            message+='Panel available at [http://localhost:{0}/process](http://localhost:{0}/process)'.format(self.panelport)
+            message+='Panel available at [http://localhost:{0}](http://localhost:{0})'.format(self.panelport)
             # Panel elements that will be shown in the PanelServer 
             # batch panel
             self.batchpanel=pn.Column()

@@ -100,15 +100,19 @@ class Experiment(object):
             self.panel_monitor=pn.Column('# PYMESO MONITOR')
             self.panel_plotter=pn.Column('# PYMESO PLOTTER')
             self.panel_plotter.append(Plotter_Button().start())
-            self.panel_server.append(Plotter_Button().start())
+            # self.panel_server.append(Plotter_Button().start())
             self._monitor=Monitor_Interface()
             self.panel_monitor.append(self._monitor.monitor_panel)
-            pn.serve({
-            'monitor': self.panel_monitor,
-            'process': self.panel_server,
-            'plotter':self.panel_plotter},
-            title={'monitor': 'MONITOR', 'process': 'PROCESS','plotter':'PLOTTER'},
-            threaded=True,show=False,verbose=False,port=self.panel_port,websocket_origin=['*'])
+            tabs = pn.Tabs(('PROCESS',self.panel_server),
+                           ('MONITOR',self.panel_monitor),
+                           ('PLOTTER',self.panel_plotter),sizing_mode='stretch_both') 
+            # pn.serve({
+            # 'monitor': self.panel_monitor,
+            # 'process': self.panel_server,
+            # 'plotter':self.panel_plotter},
+            # title={'monitor': 'MONITOR', 'process': 'PROCESS','plotter':'PLOTTER'},
+            # threaded=True,show=False,verbose=False,port=self.panel_port,websocket_origin=['*'])
+            pn.serve(tabs,threaded=True,show=False,verbose=False,port=self.panel_port,websocket_origin=['*'])
             message="Pymeso panel at [http://localhost:{0}](http://localhost:{0}/) <br> ".format(self.panel_port)+"Logfile is {}".format(logfile)
             display(Markdown(message))
         else:
