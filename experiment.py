@@ -879,7 +879,7 @@ class Experiment(object):
               wait_time=None,init_wait=None,
               measure=None, batch=False, 
               interface=None, plotter=None,run=True,
-              file_format='csv',comment=None,append=False,fly=False):
+              file_format='csv',comment=None,append=False,fly=False,tolerance=0.0):
         """
             Sweep the device defined in 'device' from start to end 
             at a given rate with Npoints points and save it to the file 'file'. 
@@ -905,6 +905,7 @@ class Experiment(object):
             - measure : specify the measured quantities in the form of a python dict. if None set to self.measure. Default : None
             - comment : add the comment provided by the user to the header of the file
             - append : append value to an existing files without putting column label. Default : False
+            - tolerance : don't go to initial value if current value is equal to start within tolerance. Default : 0.0
             
             The device can be indicated in different forms :
             - 'device', if this is defined as an alias. The label in the file will be 'device'.
@@ -935,10 +936,10 @@ class Experiment(object):
             if fly:
                 wait_time=0.0
                 local_sweep=FlySweep(device_dict[name],start,end,rate,Npoints,name=name,
-                                init_wait=init_wait,back=back,extra_rate=extra_rate,mode=mode)
+                                init_wait=init_wait,back=back,extra_rate=extra_rate,mode=mode,tolerance=tolerance)
             else:
                 local_sweep=LinSweep(device_dict[name],start,end,rate,Npoints,name=name,
-                                init_wait=init_wait,back=back,extra_rate=extra_rate,mode=mode)
+                                init_wait=init_wait,back=back,extra_rate=extra_rate,mode=mode,tolerance=tolerance)
             # define the info on the sweep
             config_info=['Sweep','{} {} {} {} {}'.format(start,end,rate,Npoints,file)]
         except ExperimentError as exception:
@@ -1126,7 +1127,7 @@ class Experiment(object):
             local_instru=device_dict[key][0]
             local_device=device_dict[key][1]
             start=getattr(local_instru, local_device)
-            local_sweep=LinSweep(device_dict[key],start,value,rate,2,name=key)
+            local_sweep=LinSweep(device_dict[key],start,value,rate,2,name=key,init_step=False)
             config_info=['Move','{0} {1} {2}'.format(key,value,rate)]
         except ExperimentError as exception:
             self.handle_error(exception,batch)
