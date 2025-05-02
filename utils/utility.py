@@ -320,13 +320,15 @@ class LinSweep(object):
                 * serpentine : alternate forward and backwards for successive stepper
                 * updn : do a forward and then a backward sweep
             - init_wait : value of the time waited at the beginning of the sweep, if None set to self.init_wait. Default : None
+            - init_step : if True do a first step to go at the initial value. Default : True
+            - tolerance : don't go to initial value if current value is equal to start within tolerance. Default : 0.0 
             
         EXAMPLES :
             sweep0=LinSweep([test,'dac'],0,1,0.1,11,name='Vbias(mV)',extra_rate=0.2,mode='updn') 
             sweep1=LinSweep(Vbias,0,1,0.1,11,extra_rate=0.2,back=True)  #if Vbias is defined as an Alias
     """
     
-    def __init__(self,device,start,stop,rate,N,name=None,init_wait=0,back=False,extra_rate=None,mode=None,**kwargs):
+    def __init__(self,device,start,stop,rate,N,name=None,init_wait=0,back=False,extra_rate=None,mode=None,init_step=True,tolerance=0.0,**kwargs):
         self.type='LinSweep'
         if name==None:
             try:
@@ -346,6 +348,8 @@ class LinSweep(object):
             self.current_value=self.get_value()
         except:
             raise ExperimentError('Device not correct.') 
+        self.init_step=init_step
+        self.tolerance=tolerance
         self.start=start
         self.end=stop
         self.N=N
@@ -466,7 +470,8 @@ class LinSweep(object):
             Set the current value of the instrument
         """
         self.busy=True
-        self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
+        if self.init_step and (abs(self.current_value-self.sweep_values[0])>self.tolerance):
+            self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
         self.current_value=self.sweep_values[0]
         self.current_index=self.index_values[0]
         self.index=0
@@ -1040,13 +1045,14 @@ class FlySweep(object):
                 * serpentine : alternate forward and backwards for successive stepper
                 * updn : do a forward and then a backward sweep
             - init_wait : value of the time waited at the beginning of the sweep, if None set to self.init_wait. Default : None
+            - tolerance : don't go to initial value if current value is equal to start within tolerance. Default : 0.0
             
         EXAMPLES :
             sweep0=FlySweep([test,'dac'],0,1,0.1,11,name='Vbias(mV)',extra_rate=0.2,mode='updn') 
             sweep1=FlySweep(Vbias,0,1,0.1,11,extra_rate=0.2,back=True)  #if Vbias is defined as an Alias
     """
     
-    def __init__(self,device,start,stop,rate,N,name=None,init_wait=0,back=False,extra_rate=None,mode=None,**kwargs):
+    def __init__(self,device,start,stop,rate,N,name=None,init_wait=0,back=False,extra_rate=None,mode=None,tolerance=0.0,**kwargs):
         self.type='FlySweep'
         if name==None:
             try:
@@ -1066,6 +1072,7 @@ class FlySweep(object):
             self.current_value=self.get_value()
         except:
             raise ExperimentError('Device not correct.') 
+        self.tolerance=tolerance
         self.start=start
         self.end=stop
         self.N=N
@@ -1187,7 +1194,8 @@ class FlySweep(object):
             Set the current value of the instrument
         """
         self.busy=True
-        self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
+        if (abs(self.current_value-self.sweep_values[0])>self.tolerance):
+            self.wait_end_sweep(self.local_sweep.sweep(self.current_value,self.sweep_values[0],self.extra_rate))
         self.current_value=self.sweep_values[0]
         self.current_index=self.index_values[0]
         self.index=0
