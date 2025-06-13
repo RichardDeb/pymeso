@@ -49,7 +49,7 @@ class Plotter_in_Notebook(object):
             self.plotpanel=plotpanel
             self.close_bokehserver=False
         message='**Plotter for file {}** <br>'.format(file)
-        message+='available at [http://localhost:{0}/plotter](http://localhost:{0}/plotter)'.format(panelport)
+        message+='available at [http://localhost:{0}](http://localhost:{0})'.format(panelport)
         self.display_plot=display(Markdown(message),display_id=True)
         
         # plot panel
@@ -184,7 +184,7 @@ class Plotter_in_Notebook(object):
            # X data range
             dataX=data[self.xdata.value]
             try:
-                plot_range=self._plot_range[x_label]
+                plot_range=self._plot_range[self.xdata.value]
                 x_range=(min(plot_range[0],plot_range[1],min(dataX)),
                             max(plot_range[0],plot_range[1],max(dataX)))
                 Nx=plot_range[2]
@@ -194,7 +194,7 @@ class Plotter_in_Notebook(object):
             # Y data
             dataY=data[self.ydata.value[0]]
             try:
-                plot_range=self._plot_range[y_label]
+                plot_range=self._plot_range[self.ydata.value[0]]
                 y_range=(min(plot_range[0],plot_range[1],min(dataY)),
                             max(plot_range[0],plot_range[1],max(dataY)))
                 Ny=plot_range[2]
