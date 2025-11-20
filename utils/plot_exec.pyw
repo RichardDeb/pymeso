@@ -24,6 +24,8 @@ class myMainWindow(QMainWindow):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # option to force Tabbed docks
+        self.setDockOptions(QMainWindow.AllowTabbedDocks|QMainWindow.ForceTabbedDocks)
         # Create the windows list to close the list of open windows
         self.list_windows=[]
     
@@ -39,6 +41,7 @@ class myDockWidget(QDockWidget):
         super().__init__(*args, **kwargs)
         # Create the event for stopping the GUI
         self.should_stop=Event()
+        self.setAllowedAreas(Qt.BottomDockWidgetArea)
         
     def closeEvent(self, event):
         self.should_stop.set()
@@ -367,15 +370,16 @@ class PlotterQT(object):
                 #                        x_axis_type='linear', y_axis_type='linear')
                 #data_image=data_canvas.points(data,x_label,y_label,agg=ds.mean(z_label))
                 histo, xedges, yedges = np.histogram2d(dataX,dataY,weights=dataZ,bins=[Nx,Ny],range=[x_range,y_range])
-                data_image=histo.T            
+                data_image=histo.T                
                 #imdata=data.pivot_table(index=self.xdata.currentText(),
                 #                    columns=self.ydata.currentText(),
                 #                    values=self.zdata.currentText())
                 if self._first_image:
                    self.plot.set_visible(False)
                    self.ax.grid(visible=False)
-                   self.image=self.ax.imshow(data_image,interpolation='nearest', origin='lower', aspect='auto',
-                                        extent=[*x_range,*y_range])
+                   self.image=self.ax.imshow(data_image,
+                                        interpolation='nearest', origin='lower', aspect='auto',
+                                        extent=[*x_range,*y_range],vmin=dataZ.min(),vmax=dataZ.max())
                    self.colorbar=self.canvas.figure.colorbar(self.image)
                    self._colorbar_removed=False
                    self.colorbar.set_label(z_label)
@@ -389,7 +393,7 @@ class PlotterQT(object):
                         self._colorbar_removed=False
                    self.image.set_data(data_image)
                    self.image.set_extent([*x_range,*y_range])
-                   self.image.set_clim((np.min(dataZ),np.max(dataZ)))
+                   self.image.set_clim(vmin=dataZ.min(),vmax=dataZ.max())
                    self.colorbar.set_label(z_label)
                    #self.image.autoscale()
             except:
@@ -495,7 +499,7 @@ class mainwindow(myMainWindow):
         #self.text = QLabel('FILES:\n\n')
         #self.text.setReadOnly(True)
         #self.text.setAlignment(Qt.AlignLeft)
-        #self.setCentralWidget(self.text)   
+        #self.setCentralWidget(self.text) 
         
     def choose_file(self):
         dir ='D:\data'
