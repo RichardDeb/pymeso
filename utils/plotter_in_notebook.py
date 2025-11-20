@@ -211,7 +211,8 @@ class Plotter_in_Notebook(object):
                     histo, xedges, yedges = np.histogram2d(dataX,dataY,weights=dataZ,bins=[Nx,Ny],range=[x_range,y_range])
                     data_image=histo.T
                     #Plot the image
-                    image=ax[i].imshow(data_image,interpolation='nearest', origin='lower', aspect='auto',extent=[*x_range,*y_range])
+                    image=ax[i].imshow(data_image,interpolation='nearest', origin='lower', aspect='auto',
+                                        extent=[*x_range,*y_range],vmin=dataZ.min(),vmax=dataZ.max())
                     colorbar=fig.colorbar(mappable=image,ax=ax[i],location='right')
                     #colorbar.set_label(zcol)
                     ax[i].set(xlabel=self.xdata.value,ylabel=self.ydata.value[0],
@@ -226,7 +227,8 @@ class Plotter_in_Notebook(object):
                 histo, xedges, yedges = np.histogram2d(dataX,dataY,weights=dataZ,bins=[Nx,Ny],range=[x_range,y_range])
                 data_image=histo.T
                 #Plot the image
-                image=ax.imshow(data_image,interpolation='nearest', origin='lower', aspect='auto',extent=[*x_range,*y_range])
+                image=ax.imshow(data_image,interpolation='nearest', origin='lower', aspect='auto',
+                                extent=[*x_range,*y_range],vmin=dataZ.min(),vmax=dataZ.max())
                 colorbar=fig.colorbar(mappable=image,ax=ax,location='right')
                 # colorbar.set_label(self.zdata.value[0])
                 ax.set(xlabel=self.xdata.value,ylabel=self.ydata.value[0],
