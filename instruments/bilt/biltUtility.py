@@ -26,6 +26,42 @@
 # THE SOFTWARE.
 #
 
+import logging
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
-from .biltChassis import Bilt
+from pymeso.instruments import Instrument
+import numpy as np
 
+class BiltUtil(Instrument):
+    """ 
+        Utility class to read multiple data of a Bilt module
+    """
+
+    def __init__(self, adapter, slot, model, **kwargs):
+        super(BiltUtil, self).__init__(
+            adapter, "Bilt Utility", **kwargs
+        )
+        self.slot=slot
+        self.model=model
+
+    def all_data(self,slot,model):
+        """ Returns all data of a module at slot "slot" of model "model" """
+        data=self.ask('i{};IDATa ?'.format(slot))
+        data=data[:-1].replace(';',',').split(',')
+        if model=='BE4082':
+            ans=np.array([data[3],data[8],data[13],data[18]])
+        elif model=='BE2142':
+            ans=np.array([data[3],data[4],data[8],data[9],data[13],data[14],data[18],data[19]])
+        elif model=='BE2101':
+            ans=float(data[3])
+        return ans
+        
+    @property    
+    def all(self):
+        """
+            Return all channels of a multichannel Bilt module :
+            - for BE4082 : voltage measured at each channel
+            - for BE2142 : voltage and current measured at each channel
+        """
+        return self.all_data(self.slot,self.model)      

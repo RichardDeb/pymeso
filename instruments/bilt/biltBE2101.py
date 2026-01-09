@@ -304,7 +304,9 @@ class BiltBE2101(Instrument):
         device_data=self.ask(self._slot+'IDATA?')
         data_dict={}
         data=device_data.split(',')
-        data_dict['Module '+data[0]]={'Voltage':float(data[3]),'Range':float(self.range),'Output':bool(data[1]=='1')}
+        data_dict['Module '+data[0]]={'Voltage':float(data[3]),
+                                        'Range':float(self.range),
+                                        'Output':bool(data[1]=='1')}
         return(data_dict)
         
     def gui(self,name=None):
