@@ -29,3 +29,4 @@
 from .sr830 import SR830
 from .sg380 import SG380
 from .sr865A import SR865A
+from .sr785 import SR785
