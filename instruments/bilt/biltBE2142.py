@@ -162,6 +162,15 @@ class BiltBE2142(Instrument):
         device_data=self.ask(self._slot+'IDATA?').split(';')
         return(float(device_data[self._channel-1].split(',')[4]))
         #return(float(self.ask(self._slot+"MEAS:CURR ?")))
+        
+    @property
+    def current(self):
+        """ 
+            A floating point property that indicate the source current in amps.
+         """
+        # device_data=self.ask(self._slot+'IDATA?').split(';')
+        # return(float(device_data[self._channel-1].split(',')[4]))
+        return(float(self.ask(self._slot+"MEAS:CURR ?")))
     
     
     def set_source_voltage(self,level):
