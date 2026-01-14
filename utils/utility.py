@@ -79,6 +79,24 @@ class Alias(object):
             return(getattr(self.instru,self.param))
         else:
             setattr(self.instru,self.param,value)
+    
+    # return configuration
+    def read_config(self):
+        """ return a configuration dict """
+        dico={'Id':'Alias',
+              'device':self.instru,
+              'attribute':self.param,
+              'name':self.name}
+        try:
+            dico_device=self.instru.read_config()
+            if 'Id' in dico_device.keys():
+               val=dico_device.pop('Id')
+               dico_device['Alias_Id']=val
+        except:
+            dico_device={}
+                
+        dico.update(dico_device)
+        return(dico)
 
 class ExperimentError(Exception):
     def __init__(self, message):
@@ -582,7 +600,7 @@ class GenericSteps(object):
     """
         Generic class used for LinSteps,LogSteps and ArraySteps 
     """
-    def __init__(self,device,*args,name=None,**kwargs):
+    def __init__(self,device,*args,name=None,condition=None,**kwargs):
         # define the generic quantities
         self.type='GenericSteps'
         if name==None:
@@ -622,6 +640,8 @@ class GenericSteps(object):
         self.index_values=[0,1,2,3]
         self.start=0
         self.end=3
+        # condition to check to continue sweep
+        self.condition=condition
                   
     def wait_function(self,wait):
         """
@@ -732,6 +752,11 @@ class GenericSteps(object):
         self.current_value=value
         self.current_index=self.index_values[self.index]
         self.progress=self.index/self.Nvalues
+        try:
+            if self.condition[0](self.condition[1]):
+                self.finished=True
+        except:
+            print('error in evaluating condition')
         if self.index==self.Nvalues:
             self.finished=True
         self.wait_function(self.wait)
@@ -966,7 +991,7 @@ class ArraySteps(GenericSteps):
         sweep0=ArraySteps([test,'dac'],[0,1,2],0.1,name='Vbias(mV)',mode='updn') 
         sweep1=ArraySteps(Vbias,[0.1,1.4,0.5],0.5,back=True)  # if Vbias is defined as an Alias
     """
-    def __init__(self,device,array,wait,name=None,back=False,init_wait=0,mode=None,**kwargs):
+    def __init__(self,device,array,wait,name=None,back=False,init_wait=0,mode=None,condition=None,**kwargs):
         super().__init__(device,name=name)
         self.type='ArraySteps'
         self.array=np.array(array)
@@ -984,6 +1009,7 @@ class ArraySteps(GenericSteps):
         # define the values used for the interface
         self.interface_start=0
         self.interface_end=len(self.array)-1
+        self.condition=condition
         
     def generate_values(self,update_forward=True):   
         N=len(self.array)
