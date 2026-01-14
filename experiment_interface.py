@@ -299,6 +299,7 @@ class Panel_Interface_Exp(object):
             self.panelport=panelport
             # starting message 
             date_string=datetime.now().strftime("%d/%m/%Y at %H:%M:%S")
+            self.init_date_string=date_string
             message='**Executing instruction started the '+date_string+' ...** <br>'
             message+='Panel available at [http://localhost:{0}](http://localhost:{0})'.format(self.panelport)
             # Panel elements that will be shown in the PanelServer 
@@ -756,12 +757,16 @@ class Panel_Interface_Exp(object):
             value_string=self.text.name+' '+self.text.value
         
         if stopped:
-            value_string='Stopped, '+value_string
+            state='stopped the '
+        else:
+            state='finished the '
         
         # clear interface
         self.main.clear()
         # write last message
-        message='**Task done the '+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+' :** <br>'+value_string
+        message='**Instruction started the '+self.init_date_string+' :**  \n'
+        message+=value_string+'  \n'
+        message+='**Task '+state+datetime.now().strftime("%d/%m/%Y at %H:%M:%S")+'**'
         self.notebook_panel.update(Markdown(message))
         # if plotting asked, do the plot
         try:
