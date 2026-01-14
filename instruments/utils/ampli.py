@@ -48,7 +48,8 @@ class Ampli(Instrument):
             self.instru=[instru.instru,instru.param]
         else:
             self.instru=instru
-            
+        
+        self.gain=gain    
         # set functions to make to change
         if isinstance(gain,(float,int)):
             if gain !=0.0:
@@ -123,6 +124,24 @@ class Ampli(Instrument):
     @property
     def value_sweepable(self):
         return(self._sweepable)
+        
+    # return configuration
+    def read_config(self):
+        """ return a configuration dict """
+        dico={'Id':'Ampli',
+              'device':self.instru[0],
+              'attribute':self.instru[1],
+              'ampli_gain':self.gain}
+        try:
+            dico_device=self.instru[0].read_config()
+            if 'Id' in dico_device.keys():
+               val=dico_device.pop('Id')
+               dico_device['Ampli_Id']=val
+        except:
+            dico_device={}
+                
+        dico.update(dico_device)
+        return(dico)
         
 class Multi_Instru(Instrument):
     """
