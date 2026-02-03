@@ -28,3 +28,4 @@
 
 from .keysightN5767A import KeysightN5767A
 from .keysightN5183B import KeysightN5183B
+from .keysightB2961A import B2961A   
